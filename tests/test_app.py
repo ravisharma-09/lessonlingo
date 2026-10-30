@@ -197,7 +197,7 @@ def test_launch_accepts_every_option_the_cli_passes(
     app.launch(port=7000, warm=None, lan=True, workspace_root=tmp_path)
 
     assert Dummy.kwargs["server_name"] == "0.0.0.0"
-    assert Dummy.kwargs["allowed_paths"] == [str(tmp_path.resolve())]
+    assert Dummy.kwargs["allowed_paths"] == [str(tmp_path.resolve()), str(app.APP_TEMP)]
     assert {"port", "share", "warm", "lan", "workspace_root"} <= set(
         inspect.signature(app.launch).parameters
     )

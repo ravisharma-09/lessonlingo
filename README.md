@@ -205,25 +205,43 @@ items are skipped next time. Removing a file moves it to `.trash/`; nothing is d
 permanently. Course settings hold the languages, the run mode and an optional glossary. The
 course pack zip collects every translated file.
 
-### Spoken dubbing (optional, non-commercial voices)
+### Spoken dubbing in Hindi and Kannada (optional)
 
-`--dub` also speaks each translated subtitle line and adds the voice as an extra audio track
-(`<name>.dubbed.mp4`, the original sound stays as track 1) plus one `.wav` per language:
+`--dub` (or "Also speak it" in the Lecture tab's Options) speaks each translated subtitle line in
+Hindi or Kannada. In the app, step 3 gets a **Voice** switch (Original voice, Hindi, Kannada) that
+plays the chosen voice in step with the video. You also get one `.wav` and one
+`<name>.<language>.dubbed.mp4` (voice only) per language, plus `<name>.dubbed.mp4` with the
+original sound and every voice as extra tracks.
+
+Two voice engines, chosen with `--voice-engine auto|parler|mms` (default `auto`):
+
+| Engine | Sounds like | Size | Licence | Extra setup |
+| --- | --- | --- | --- | --- |
+| **Indic Parler-TTS** (AI4Bharat) | a real person, named speakers | about 3.8 GB | Apache-2.0 per its Hugging Face page (confirm on the model card) | `git`, an extra package, accept the model terms |
+| **Meta MMS-TTS** | robotic but clear | about 145 MB per language | CC-BY-NC 4.0, non-commercial only | none |
+
+`auto` uses Indic Parler-TTS when it is installed and downloaded, otherwise MMS.
+
+One-time setup, while online (natural voice):
 
 ```powershell
-lessonlingo setup --voices kan_Knda hin_Deva      # once, while online
-lessonlingo video .\lecture.mp4 --to kan_Knda --dub --offline
+python -m pip install -r requirements-voice.txt
+hf auth login
+lessonlingo setup --voices hin_Deva kan_Knda --voice-engine parler
 ```
 
-The voices are Meta's MMS-TTS models, run locally through the `transformers` library we already
-use. **Their licence is CC-BY-NC 4.0 (non-commercial use only)**, which is why dubbing is off by
-default and the voices are not part of the normal `lessonlingo setup`. Spoken lines that are
-longer than their subtitle slot are sped up by at most 1.3 times; after that the voice falls
-slightly behind the picture and the command prints the delay. Whether a voice exists for each of
-the ten languages has not been checked; a missing one reports a clear error. This feature is
-tested with a fake voice on the development machine; the real voices must be tried on the GPU
-laptop. In the web app, tick "Also speak the translation" on the Lecture tab; you then get
-the voice files, the dubbed video and a "Hear the translation" player.
+Open https://huggingface.co/ai4bharat/indic-parler-tts and accept the terms first. For the small
+fallback voice instead: `lessonlingo setup --voices hin_Deva kan_Knda`. Then:
+
+```powershell
+lessonlingo video .\lecture.mp4 --to kan_Knda hin_Deva --dub --offline
+python scripts/smoke_voice.py --engine both     # writes sample audio to outputs\voice_test
+```
+
+Only Hindi and Kannada are offered; other languages are skipped with a note. A spoken line that is
+longer than its subtitle slot is sped up by at most 1.3 times; after that the voice falls a little
+behind the picture, and the command prints how much. The voices are tested with a fake voice on the
+development machine only; real voice quality, speed and memory use must be checked on the GPU laptop.
 
 ### Course glossary, transcript check and class pack
 

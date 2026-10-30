@@ -80,3 +80,15 @@ Found on 31 Oct 2026, from search summaries. Check originals before quoting numb
 - A community learning centre or NGO shares translated lesson packs on a pen drive.
 - An open-source maintainer makes a README and contributor guide available in several languages.
 - Subtitles also help students who are deaf or hard of hearing, which is a side benefit to mention.
+
+## Voices (31 Oct 2026)
+
+- All ten `facebook/mms-tts-*` Indian-language voices exist, are not gated, are about 145 MB each
+  (`.safetensors`) and carry CC-BY-NC 4.0 on Hugging Face.
+- `ai4bharat/indic-parler-tts` is about 3.75 GB, gated (automatic approval) and tagged Apache-2.0.
+  The `parler-tts` package pins `transformers>=4.46.1,<=4.46.1`, the same version this project pins.
+  Speaker names (Hindi: Divya, Rohit, Aman, Rani; Kannada: Anu, Suresh, Chetan, Vidya) come from an
+  unofficial mirror of the model card and must be confirmed.
+- `ai4bharat/IndicF5` is tagged MIT but needs a reference recording and remote code, so it was not used.
+- No published listening test compares these engines for Hindi and Kannada. Our own listening test is
+  `scripts/smoke_voice.py`.

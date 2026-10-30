@@ -25,7 +25,7 @@ from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_segments
 from lessonlingo.subtitles import Cue, format_timestamp
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
-from lessonlingo.tts import MMSSynthesizer, Synthesizer, dub_subtitles
+from lessonlingo.tts import Synthesizer, dub_subtitles, make_synthesizer
 from lessonlingo.ui_assets import (
     HERO_HTML,
     LESSON_STEPS,
@@ -61,6 +61,17 @@ NOTE = (
     "`lessonlingo setup`. After that, translating lessons needs no internet connection. "
     "Machine translation can be wrong, so ask a speaker to check important material."
 )
+
+# The app writes its results here, and only this folder (plus the courses folder) may be served.
+APP_TEMP = Path(tempfile.gettempdir()) / "lessonlingo_output"
+
+
+def new_output_folder(prefix: str) -> Path:
+    """A fresh folder for one job's files, inside the folder the web server is allowed to serve."""
+
+    APP_TEMP.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=prefix, dir=APP_TEMP))
+
 
 FORCE_LIGHT_JS = """() => {
   const url = new URL(window.location);
@@ -288,10 +299,55 @@ def _subtitle_data_url(path: str) -> str:
     return f"data:text/vtt;charset=utf-8;base64,{encoded}"
 
 
-def player_html(video: str, subtitles: dict[str, str], selected: str) -> str:
+VOICE_JS = """(voice) => {
+  const root = document.querySelector('#lecture-player');
+  const video = root && root.querySelector('video');
+  if (!video) return;
+  const audios = () => Array.from(root.querySelectorAll('audio'));
+  const current = () => audios().find((a) => a.dataset.code === window.__voice);
+  const align = () => {
+    const a = current();
+    if (a && Math.abs(a.currentTime - video.currentTime) > 0.3) a.currentTime = video.currentTime;
+  };
+  const start = () => {
+    const a = current();
+    if (a) { align(); a.play().catch(() => {}); }
+  };
+  if (!video.__voiceBound) {
+    video.__voiceBound = true;
+    video.addEventListener('play', start);
+    video.addEventListener('playing', start);
+    video.addEventListener('pause', () => audios().forEach((a) => a.pause()));
+    video.addEventListener('waiting', () => audios().forEach((a) => a.pause()));
+    video.addEventListener('seeked', align);
+    video.addEventListener('timeupdate', align);
+    video.addEventListener('ratechange', () => {
+      const a = current();
+      if (a) a.playbackRate = video.playbackRate;
+    });
+  }
+  window.__voice = voice;
+  audios().forEach((a) => a.pause());
+  video.muted = voice !== 'original';
+  const a = current();
+  if (a) {
+    a.currentTime = video.currentTime;
+    a.playbackRate = video.playbackRate;
+    if (!video.paused) a.play().catch(() => {});
+  }
+}"""
+
+
+def player_html(
+    video: str,
+    subtitles: dict[str, str],
+    selected: str,
+    voices: dict[str, str] | None = None,
+) -> str:
     """A standard browser video player with every language as a subtitle track.
 
-    Subtitles are embedded in the page. The chosen language is switched on by default and by
+    Dubbed voices (one hidden audio element each) are kept in step by VOICE_JS. Subtitles are
+    embedded in the page. The chosen language is switched on by default and by
     SWITCH_TRACK_JS; viewers can also pick one in the player's own captions menu.
     """
 
@@ -301,9 +357,13 @@ def player_html(video: str, subtitles: dict[str, str], selected: str) -> str:
         f"{' default' if code == selected else ''}>"
         for code, path in subtitles.items()
     )
+    voice_tags = "".join(
+        f'<audio preload="auto" data-code="{code}" src="{_file_url(path)}"></audio>'
+        for code, path in (voices or {}).items()
+    )
     return (
         f'<video controls preload="metadata" src="{_file_url(video)}" '
-        f'style="width:100%;border-radius:14px;background:#000">{tracks}</video>'
+        f'style="width:100%;border-radius:14px;background:#000">{tracks}</video>{voice_tags}'
     )
 
 
@@ -368,7 +428,7 @@ def build_app(
     holder: ModelHolder | None = None,
     transcriber_factory: Callable[..., Transcriber] = FasterWhisperTranscriber,
     workspace: Workspace | None = None,
-    synthesizer_factory: Callable[[], Synthesizer] = MMSSynthesizer,
+    synthesizer_factory: Callable[[], Synthesizer] = make_synthesizer,
 ) -> Any:
     """Build the Gradio Blocks app. Pass a holder with FakeTranslator for tests."""
 
@@ -500,7 +560,7 @@ def build_app(
         table = rows.values.tolist() if hasattr(rows, "values") else rows
         try:
             cues = cues_from_rows(heard["cues"], table)
-            folder = Path(tempfile.mkdtemp(prefix="lessonlingo_video_"))
+            folder = new_output_folder("video_")
             stem = Path(upload).stem
             written = translate_lecture(
                 cues,
@@ -512,15 +572,25 @@ def build_app(
                 status=lambda message: progress(None, desc=message),
             )
             spoken: list[Path] = []
+            voice_notes: list[str] = []
+            engine = ""
             if dub:
                 models.close()  # free the GPU before the voice model loads
-                progress(None, desc="Speaking the translation")
+                synth = synthesizer_factory()
+
+                def speak_note(message: str) -> None:
+                    progress(None, desc=message)
+                    if not message.startswith("Speaking"):
+                        voice_notes.append(message)
+
                 spoken = dub_subtitles(
                     [p for p in written if p.suffix == ".srt"],
                     Path(upload),
                     folder,
-                    synthesizer_factory(),
+                    synth,
+                    note=speak_note,
                 )
+                engine = getattr(synth, "engine_name", "")
             pack = make_class_pack(
                 [*written, *[p for p in spoken if p.suffix == ".wav"]],
                 folder / f"{stem}.classpack.zip",
@@ -532,7 +602,7 @@ def build_app(
         first = next(iter(vtt))
         has_video = not str(upload).endswith((".srt", ".vtt"))
         player = (
-            player_html(upload, vtt, first)
+            player_html(upload, vtt, first, wavs)
             if has_video
             else "<p>Your subtitle files are ready to download below.</p>"
         )
@@ -541,25 +611,27 @@ def build_app(
             if has_video
             else "Download the translated subtitle files below."
         )
+        if wavs and has_video:
+            help_text += f" Choose a Voice to hear the lecture in that language ({engine})."
+        elif dub and not wavs:
+            help_text += " No voice was made. " + " ".join(voice_notes)
+        elif voice_notes:
+            help_text += " " + " ".join(voice_notes)
+        voice_choices = [
+            ("Original voice", "original"),
+            *[(SUPPORTED_LANGUAGES[c], c) for c in wavs],
+        ]
         return (
             gr.File(value=[*map(str, written), *map(str, spoken), str(pack)]),
             vtt,
             gr.Radio(choices=[(SUPPORTED_LANGUAGES[c], c) for c in vtt], value=first),
             gr.HTML(value=player),
-            wavs,
-            gr.Audio(value=wavs[first], visible=True) if first in wavs else gr.Audio(visible=False),
+            gr.Radio(choices=voice_choices, value="original", visible=bool(wavs) and has_video),
             f"### Your lecture is ready\n{help_text}",
             gr.Column(visible=False),
             gr.Column(visible=True),
             stepper_html(3),
         )
-
-    def on_language_audio(wavs: dict[str, str], code: str) -> Any:
-        """Only the voice follows the language here; the browser switches the subtitles itself."""
-
-        if code in wavs:
-            return gr.Audio(value=wavs[code], visible=True)
-        return gr.Audio(visible=False)
 
     def on_new_lecture() -> tuple[Any, ...]:
         return (
@@ -583,52 +655,55 @@ def build_app(
             with gr.Tab("Lecture", id="lecture"):
                 v_steps = gr.HTML(stepper_html(1), padding=False)
                 with gr.Column(elem_classes="step-body") as lec_add:
-                    gr.Markdown(
-                        "### Add your lecture\nA video, audio or `.srt` file in English.",
-                        elem_classes="step",
-                    )
-                    v_upload = gr.File(
-                        show_label=False,
-                        height=170,
-                        file_types=[
-                            ".mp4",
-                            ".mkv",
-                            ".mov",
-                            ".webm",
-                            ".mp3",
-                            ".wav",
-                            ".m4a",
-                            ".srt",
-                            ".vtt",
-                        ],
-                        type="filepath",
-                    )
-                    if SAMPLE_LECTURE.is_file():
-                        v_sample = gr.Button(
-                            "No file? Try the sample lecture",
-                            size="sm",
-                            elem_classes="link-button",
-                        )
-                        v_sample.click(lambda: str(SAMPLE_LECTURE), None, v_upload)
-                    v_targets = targets_box(["kan_Knda", "hin_Deva"])
-                    with gr.Accordion("Options", open=False):
-                        v_mode = gr.Radio(
-                            label="How should it run?", choices=MODE_CHOICES, value="light"
-                        )
-                        v_keep = gr.Textbox(
-                            label="Keep these words in English (separated by commas)",
-                            placeholder="photosynthesis, Python",
-                        )
-                        v_sheet = gr.File(
-                            label="Course glossary (.csv: term, then the exact word per language)",
-                            file_types=[".csv"],
-                            type="filepath",
-                        )
-                        v_dub = gr.Checkbox(
-                            label="Also speak the translation (non-commercial voices; run "
-                            "`lessonlingo setup --voices` first)",
-                            value=False,
-                        )
+                    with gr.Row(elem_classes="split"):
+                        with gr.Column(scale=1, min_width=320):
+                            gr.Markdown(
+                                "### Add your lecture\nA video, audio or `.srt` file in English.",
+                                elem_classes="step",
+                            )
+                            v_upload = gr.File(
+                                show_label=False,
+                                height=170,
+                                file_types=[
+                                    ".mp4",
+                                    ".mkv",
+                                    ".mov",
+                                    ".webm",
+                                    ".mp3",
+                                    ".wav",
+                                    ".m4a",
+                                    ".srt",
+                                    ".vtt",
+                                ],
+                                type="filepath",
+                            )
+                            if SAMPLE_LECTURE.is_file():
+                                v_sample = gr.Button(
+                                    "No file? Try the sample lecture",
+                                    size="sm",
+                                    elem_classes="link-button",
+                                )
+                                v_sample.click(lambda: str(SAMPLE_LECTURE), None, v_upload)
+
+                        with gr.Column(scale=1, min_width=320):
+                            v_targets = targets_box(["kan_Knda", "hin_Deva"])
+                            with gr.Accordion("Options", open=False):
+                                v_mode = gr.Radio(
+                                    label="How should it run?", choices=MODE_CHOICES, value="light"
+                                )
+                                v_keep = gr.Textbox(
+                                    label="Keep these words in English (separated by commas)",
+                                    placeholder="photosynthesis, Python",
+                                )
+                                v_sheet = gr.File(
+                                    label="Course glossary (.csv, see the README)",
+                                    file_types=[".csv"],
+                                    type="filepath",
+                                )
+                                v_dub = gr.Checkbox(
+                                    label="Also speak it (Hindi and Kannada, needs voice setup)",
+                                    value=False,
+                                )
                     with gr.Column(elem_classes="sticky-cta"):
                         v_listen = gr.Button("Continue", variant="primary", size="lg")
                 with gr.Column(visible=False, elem_classes="step-body") as lec_check:
@@ -652,17 +727,27 @@ def build_app(
                         v_go = gr.Button("Translate", variant="primary")
                 with gr.Column(visible=False, elem_classes="step-body") as lec_watch:
                     v_done = gr.Markdown("### Your lecture is ready", elem_classes="step")
-                    v_lang = gr.Radio(show_label=False, choices=[], elem_classes="lang-chips")
-                    v_player = gr.HTML(padding=False, elem_id="lecture-player")
-                    v_audio = gr.Audio(label="Hear the translation", visible=False)
-                    v_files = gr.File(
-                        label="Download subtitles (.srt, .vtt) and the class pack (.zip)",
-                        file_count="multiple",
-                    )
-                    v_again = gr.Button("Translate another lecture", variant="secondary")
+                    with gr.Row(elem_classes="split"):
+                        with gr.Column(scale=3, min_width=320):
+                            v_player = gr.HTML(padding=False, elem_id="lecture-player")
+                        with gr.Column(scale=2, min_width=300):
+                            v_lang = gr.Radio(
+                                label="Subtitles", choices=[], elem_classes="lang-chips"
+                            )
+                            v_voice = gr.Radio(
+                                label="Voice",
+                                choices=[("Original voice", "original")],
+                                value="original",
+                                elem_classes="lang-chips",
+                                visible=False,
+                            )
+                            v_files = gr.File(
+                                label="Download subtitles (.srt, .vtt), voices and the class pack",
+                                file_count="multiple",
+                            )
+                            v_again = gr.Button("Translate another lecture", variant="secondary")
                 v_heard = gr.State({})
                 v_state = gr.State({})
-                v_wavs = gr.State({})
 
                 v_listen.click(
                     on_listen,
@@ -680,18 +765,17 @@ def build_app(
                         v_state,
                         v_lang,
                         v_player,
-                        v_wavs,
-                        v_audio,
+                        v_voice,
                         v_done,
                         lec_check,
                         lec_watch,
                         v_steps,
                     ],
                 ).then(None, v_lang, None, js=SWITCH_TRACK_JS).then(
-                    None, None, None, js=SCROLL_TOP_JS
-                )
-                v_lang.change(on_language_audio, [v_wavs, v_lang], v_audio)
+                    None, v_voice, None, js=VOICE_JS
+                ).then(None, None, None, js=SCROLL_TOP_JS)
                 v_lang.change(None, v_lang, None, js=SWITCH_TRACK_JS)
+                v_voice.change(None, v_voice, None, js=VOICE_JS)
                 v_again.click(
                     on_new_lecture,
                     None,
@@ -701,36 +785,41 @@ def build_app(
             with gr.Tab("Lesson", id="lesson"):
                 les_steps = gr.HTML(stepper_html(1, LESSON_STEPS), padding=False)
                 with gr.Column(elem_classes="step-body") as les_add:
-                    gr.Markdown(
-                        "### Add your lesson\nPaste English text, or upload a `.md` or `.txt`.",
-                        elem_classes="step",
-                    )
-                    text = gr.Textbox(
-                        show_label=False,
-                        value=DEFAULT_TEXT,
-                        lines=8,
-                        placeholder="Paste English lesson text here",
-                    )
-                    upload = gr.File(
-                        label="or upload a file",
-                        height=130,
-                        file_types=[".md", ".markdown", ".txt"],
-                        type="filepath",
-                    )
-                    targets = targets_box(["hin_Deva", "kan_Knda"])
-                    with gr.Accordion("Options", open=False):
-                        mode = gr.Radio(
-                            label="How should it run?", choices=MODE_CHOICES, value="light"
-                        )
-                        keep = gr.Textbox(
-                            label="Keep these words in English (separated by commas)",
-                            placeholder="photosynthesis, Python",
-                        )
-                        sheet = gr.File(
-                            label="Course glossary (.csv: term, then the exact word per language)",
-                            file_types=[".csv"],
-                            type="filepath",
-                        )
+                    with gr.Row(elem_classes="split"):
+                        with gr.Column(scale=1, min_width=320):
+                            gr.Markdown(
+                                "### Add your lesson\nPaste English text or upload a file.",
+                                elem_classes="step",
+                            )
+                            text = gr.Textbox(
+                                show_label=False,
+                                value=DEFAULT_TEXT,
+                                lines=8,
+                                placeholder="Paste English lesson text here",
+                            )
+                            upload = gr.File(
+                                label="or upload a file",
+                                height=130,
+                                file_types=[".md", ".markdown", ".txt"],
+                                type="filepath",
+                            )
+                        with gr.Column(scale=1, min_width=320):
+                            targets = targets_box(["hin_Deva", "kan_Knda"])
+                            with gr.Accordion("Options", open=False):
+                                mode = gr.Radio(
+                                    label="How should it run?",
+                                    choices=MODE_CHOICES,
+                                    value="light",
+                                )
+                                keep = gr.Textbox(
+                                    label="Keep these words in English (separated by commas)",
+                                    placeholder="photosynthesis, Python",
+                                )
+                                sheet = gr.File(
+                                    label="Course glossary (.csv, see the README)",
+                                    file_types=[".csv"],
+                                    type="filepath",
+                                )
                     with gr.Column(elem_classes="sticky-cta"):
                         go = gr.Button("Translate lesson", variant="primary", size="lg")
                 with gr.Column(visible=False, elem_classes="step-body") as les_review:
@@ -846,6 +935,6 @@ def launch(
         theme=make_theme(),
         css=GREEN_CSS,
         js=FORCE_LIGHT_JS,
-        allowed_paths=[str(courses_home.root)],
+        allowed_paths=[str(courses_home.root), str(APP_TEMP)],
         footer_links=[],
     )
