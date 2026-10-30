@@ -7,6 +7,7 @@ Set up once, then no internet needed: the app only uses models that
 from __future__ import annotations
 
 import tempfile
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -81,6 +82,26 @@ def read_source(text: str | None, upload_path: str | None) -> tuple[str, str]:
     if text and text.strip():
         return text, "lesson"
     raise ValueError("Paste a lesson or upload a .md or .txt file first.")
+
+
+def friendly_error(error: Exception) -> str:
+    """Turn a raw model or download error into a short message that says what to do."""
+
+    text = str(error)
+    lowered = text.lower()
+    if "out of memory" in lowered:
+        return (
+            "The graphics card ran out of memory. Choose 'Quick and light', "
+            "close other programs, and try again."
+        )
+    if "gated" in lowered or "401" in lowered:
+        return (
+            "The model needs access. While online, accept both model pages on Hugging Face, "
+            "run `hf auth login`, then `lessonlingo setup`."
+        )
+    if "local_files_only" in lowered or "offline" in lowered or "couldn't connect" in lowered:
+        return "A model is not downloaded yet. While online, run `lessonlingo setup` once."
+    return text
 
 
 ReviewDocs = dict[str, tuple[list[Segment], list[str]]]
@@ -240,7 +261,7 @@ def build_app(
             )
             stem = read_source(text, upload)[1]
         except (ValueError, FileNotFoundError, RuntimeError) as error:
-            raise gr.Error(str(error)) from error
+            raise gr.Error(friendly_error(error)) from error
         first = next(iter(docs))
         review = {"stem": stem, "docs": docs}
         return (
@@ -285,7 +306,7 @@ def build_app(
                 status=lambda message: progress(None, desc=message),
             )
         except (ValueError, FileNotFoundError, RuntimeError) as error:
-            raise gr.Error(str(error)) from error
+            raise gr.Error(friendly_error(error)) from error
         first = next(iter(vtt))
         return (
             f"Done. {len(files)} subtitle files ready.",
@@ -394,8 +415,23 @@ def build_app(
     return app
 
 
-def launch(port: int = 7860, share: bool = False) -> None:
-    """Start the web interface on this computer."""
+def warm_up(holder: ModelHolder, mode: Mode) -> None:
+    """Load a model in the background so the first translation on stage is fast."""
 
-    app = build_app()
+    def load() -> None:
+        try:
+            holder.get(mode).translate(["Hello."], "hin_Deva")
+        except Exception as error:  # warm-up is best effort; the real click reports errors
+            print(f"Warm-up skipped: {friendly_error(error)}")
+
+    threading.Thread(target=load, daemon=True).start()
+
+
+def launch(port: int = 7860, share: bool = False, warm: Mode | None = None) -> None:
+    """Start the web interface on this computer, optionally preloading a model."""
+
+    holder = ModelHolder()
+    if warm:
+        warm_up(holder, warm)
+    app = build_app(holder)
     app.launch(server_port=port, share=share, theme=make_theme(), css=GREEN_CSS)

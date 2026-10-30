@@ -86,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     app_parser = subparsers.add_parser("app", help="open the web interface on this computer")
     app_parser.add_argument("--port", type=int, default=7860, help="port (default: 7860)")
+    app_parser.add_argument(
+        "--warm",
+        choices=("light", "quality"),
+        help="load this model at start so the first translation is fast",
+    )
     app_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
 
     setup_parser = subparsers.add_parser(
@@ -180,7 +185,7 @@ def main(
         if args.command == "app":
             from lessonlingo.app import launch
 
-            launch(port=args.port)
+            launch(port=args.port, warm=args.warm)
             return 0
         if args.command == "video":
             return _run_video(args, translator)

@@ -115,3 +115,27 @@ def test_review_rows_and_save_round_trip(tmp_path: Path) -> None:
     )
 
     assert saved.startswith("# [hin_Deva] Hi") and "EDITED line" in saved
+
+
+def test_friendly_error_explains_common_failures() -> None:
+    from lessonlingo.app import friendly_error
+
+    assert "Quick and light" in friendly_error(RuntimeError("CUDA out of memory. Tried to"))
+    assert "lessonlingo setup" in friendly_error(RuntimeError("401 Client Error: gated repo"))
+    assert "lessonlingo setup" in friendly_error(RuntimeError("local_files_only is set"))
+    assert friendly_error(ValueError("Pick a file")) == "Pick a file"
+
+
+def test_warm_up_loads_the_model_once() -> None:
+    from lessonlingo.app import warm_up
+
+    holder = ModelHolder(lambda mode: FakeTranslator())
+    warm_up(holder, "light")
+
+    import time
+
+    for _ in range(50):
+        if holder._translator is not None:
+            break
+        time.sleep(0.02)
+    assert holder._translator is not None
