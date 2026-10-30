@@ -14,6 +14,7 @@ from typing import Any
 from lessonlingo.languages import SUPPORTED_LANGUAGES
 from lessonlingo.pipeline import translate_text
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
+from lessonlingo.video import FasterWhisperTranscriber, Transcriber, translate_video
 
 DEFAULT_TEXT = (
     "# Water Cycle\n\n"
@@ -94,6 +95,33 @@ def run_translation(
     return paths, "\n\n".join(preview)
 
 
+def run_video_job(
+    upload_path: str | None,
+    targets: list[str],
+    mode: Mode,
+    translator: Translator,
+    transcriber: Transcriber,
+    out_dir: Path | None = None,
+    status: Callable[[str], None] | None = None,
+) -> tuple[list[str], dict[str, str]]:
+    """Translate a lecture; return (all subtitle files, {language code: .vtt path})."""
+
+    if not upload_path:
+        raise ValueError("Upload a lecture video (or a .srt file) first.")
+    folder = out_dir or Path(tempfile.mkdtemp(prefix="lessonlingo_video_"))
+    written = translate_video(
+        Path(upload_path),
+        targets,
+        mode,
+        folder,
+        transcriber=transcriber,
+        translator=translator,
+        status=status,
+    )
+    vtt = {p.name.split(".")[-2]: str(p) for p in written if p.suffix == ".vtt"}
+    return [str(p) for p in written], vtt
+
+
 class ModelHolder:
     """Keeps one real translator alive and frees it when the mode changes."""
 
@@ -123,7 +151,10 @@ class ModelHolder:
         self._mode = None
 
 
-def build_app(holder: ModelHolder | None = None) -> Any:
+def build_app(
+    holder: ModelHolder | None = None,
+    transcriber_factory: Callable[[], Transcriber] = FasterWhisperTranscriber,
+) -> Any:
     """Build the Gradio Blocks app. Pass a holder with FakeTranslator for tests."""
 
     import gradio as gr
@@ -153,36 +184,108 @@ def build_app(holder: ModelHolder | None = None) -> Any:
             raise gr.Error(str(error)) from error
         return f"Done. {len(paths)} file(s) ready to download.", paths, preview
 
+    language_choices = [(f"{name} ({code})", code) for code, name in SUPPORTED_LANGUAGES.items()]
+
+    def on_video(
+        upload: str | None, targets: list[str], mode: Mode, progress: Any = None
+    ) -> tuple[Any, ...]:
+        if not targets:
+            raise gr.Error("Pick at least one language.")
+        progress = progress or gr.Progress()
+        models.close()  # free the GPU before the speech model loads
+        try:
+            files, vtt = run_video_job(
+                upload,
+                targets,
+                mode,
+                models.get(mode),
+                transcriber_factory(),
+                status=lambda message: progress(None, desc=message),
+            )
+        except (ValueError, FileNotFoundError, RuntimeError) as error:
+            raise gr.Error(str(error)) from error
+        first = next(iter(vtt))
+        return (
+            f"Done. {len(files)} subtitle files ready.",
+            files,
+            vtt,
+            gr.Dropdown(
+                choices=[(SUPPORTED_LANGUAGES[c], c) for c in vtt], value=first, visible=True
+            ),
+            gr.Video(value=upload, subtitles=vtt[first])
+            if not str(upload).endswith((".srt", ".vtt"))
+            else gr.Video(),
+        )
+
+    def on_language(upload: str | None, vtt: dict[str, str], code: str) -> Any:
+        if not upload or code not in vtt or str(upload).endswith((".srt", ".vtt")):
+            return gr.Video()
+        return gr.Video(value=upload, subtitles=vtt[code])
+
     with gr.Blocks(title="LessonLingo") as app:
         gr.Markdown("# LessonLingo", elem_id="title")
         gr.Markdown(
-            "Free lessons in your language. Set up once, then no internet needed.",
+            "Free lectures in your language. Set up once, then no internet needed.",
             elem_id="subtitle",
         )
-        with gr.Group():
-            text = gr.Textbox(
-                label="1. Paste your lesson",
-                value=DEFAULT_TEXT,
-                lines=9,
-                placeholder="Paste English lesson text here",
-            )
-            upload = gr.File(
-                label="or upload a .md or .txt file",
-                file_types=[".md", ".markdown", ".txt"],
+        with gr.Tab("Lecture video"):
+            v_upload = gr.File(
+                label="1. Add an English lecture (video, audio, or a .srt file)",
+                file_types=[
+                    ".mp4",
+                    ".mkv",
+                    ".mov",
+                    ".webm",
+                    ".mp3",
+                    ".wav",
+                    ".m4a",
+                    ".srt",
+                    ".vtt",
+                ],
                 type="filepath",
             )
-        targets = gr.CheckboxGroup(
-            label="2. Pick languages",
-            choices=[(f"{name} ({code})", code) for code, name in SUPPORTED_LANGUAGES.items()],
-            value=["hin_Deva", "kan_Knda"],
-        )
-        mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
-        go = gr.Button("Translate lesson", variant="primary", size="lg", elem_id="go")
-        status = gr.Markdown()
-        files = gr.File(label="Download one file per language", file_count="multiple")
-        preview = gr.Textbox(label="Preview", lines=12, interactive=False)
+            v_targets = gr.CheckboxGroup(
+                label="2. Pick languages", choices=language_choices, value=["kan_Knda", "hin_Deva"]
+            )
+            v_mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
+            v_go = gr.Button("Translate lecture", variant="primary", size="lg")
+            v_status = gr.Markdown()
+            v_state = gr.State({})
+            v_lang = gr.Dropdown(label="Watch with subtitles in", choices=[], visible=False)
+            v_player = gr.Video(label="Lecture", interactive=False)
+            v_files = gr.File(
+                label="Download subtitle files (.srt and .vtt)", file_count="multiple"
+            )
+            v_go.click(
+                on_video,
+                [v_upload, v_targets, v_mode],
+                [v_status, v_files, v_state, v_lang, v_player],
+            )
+            v_lang.change(on_language, [v_upload, v_state, v_lang], v_player)
+
+        with gr.Tab("Text lesson"):
+            with gr.Group():
+                text = gr.Textbox(
+                    label="1. Paste your lesson",
+                    value=DEFAULT_TEXT,
+                    lines=9,
+                    placeholder="Paste English lesson text here",
+                )
+                upload = gr.File(
+                    label="or upload a .md or .txt file",
+                    file_types=[".md", ".markdown", ".txt"],
+                    type="filepath",
+                )
+            targets = gr.CheckboxGroup(
+                label="2. Pick languages", choices=language_choices, value=["hin_Deva", "kan_Knda"]
+            )
+            mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
+            go = gr.Button("Translate lesson", variant="primary", size="lg", elem_id="go")
+            status = gr.Markdown()
+            files = gr.File(label="Download one file per language", file_count="multiple")
+            preview = gr.Textbox(label="Preview", lines=12, interactive=False)
+            go.click(on_translate, [text, upload, targets, mode], [status, files, preview])
         gr.Markdown(NOTE)
-        go.click(on_translate, [text, upload, targets, mode], [status, files, preview])
     return app
 
 

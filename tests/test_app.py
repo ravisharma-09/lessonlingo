@@ -76,3 +76,24 @@ def test_offline_env_var_enables_offline_mode(
     import os
 
     assert os.environ["HF_HUB_OFFLINE"] == "1"
+
+
+def test_run_video_job_returns_vtt_per_language(tmp_path: Path) -> None:
+    from lessonlingo.app import run_video_job
+    from lessonlingo.video import FakeTranscriber
+
+    lecture = tmp_path / "talk.srt"
+    lecture.write_text("1\n00:00:00,000 --> 00:00:02,000\nHello class.\n", encoding="utf-8")
+
+    files, vtt = run_video_job(
+        str(lecture),
+        ["kan_Knda", "hin_Deva"],
+        "light",
+        FakeTranslator(),
+        FakeTranscriber(),
+        tmp_path,
+    )
+
+    assert set(vtt) == {"kan_Knda", "hin_Deva"} and len(files) == 5
+    with pytest.raises(ValueError):
+        run_video_job(None, ["hin_Deva"], "light", FakeTranslator(), FakeTranscriber())
