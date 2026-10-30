@@ -179,6 +179,23 @@ that sentence is translated again without protection.
 The data flow, module interfaces and UI system are described in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+### My courses (folders, videos and batch translation)
+
+The first tab of the web app keeps whole courses on disk, under `~/LessonLingo` by default
+(`--workspace PATH` or `LESSONLINGO_HOME` changes it):
+
+```
+Science 8/
+  course.json   glossary.csv   lectures/   lessons/   outputs/   .trash/
+```
+
+Create a course, add videos, audio, `.srt` files and lessons (they are sorted into `lectures/`
+and `lessons/`), then press Translate everything. All lectures are transcribed first and then
+everything is translated, so the speech and translation models never share the GPU. Finished
+items are skipped next time. Removing a file moves it to `.trash/`; nothing is deleted
+permanently. Course settings hold the languages, the run mode and an optional glossary. The
+course pack zip collects every translated file.
+
 ### Course glossary, transcript check and class pack
 
 - **Check the English first.** In the Lecture video tab, press Listen, fix any mistakes in the

@@ -52,6 +52,8 @@ flowchart LR
 | `pipeline.py` | `translate_segments`, `translate_text`, `translate_file`, `translate_folder` | Caches identical sentences within a run. |
 | `subtitles.py` | `Cue`, `parse_subtitles`, `load_subtitles`, `to_srt`, `to_vtt`, `with_text`, `wrap_text` | SRT and WebVTT. Wraps at 42 characters. |
 | `video.py` | `Transcriber`, `FakeTranscriber`, `FasterWhisperTranscriber`, `extract_audio`, `translate_video`, `embed_subtitles` | Status callback reports each stage. |
+| `workspace.py` | `Workspace(root)`, `create_course`, `add_file`, `list_items`, `translate_course`, `trash_item`, `course_pack` | Courses on disk. Lectures are all transcribed first, then all translated. |
+| `library.py` | `build_library_tab(...)` | The My courses tab. |
 | `pack.py` | `make_class_pack(files, zip_path)` | Zip with START_HERE.txt for sharing. |
 | `setup_models.py` | `run_setup`, `run_verify`, `enable_offline_mode` | Downloads IndicTrans2 1B and 200M plus the Whisper model. |
 | `app.py` | `build_app(holder, transcriber_factory)`, `run_translation`, `run_video_job`, `review_rows`, `save_review`, `ModelHolder` | Gradio UI. `ModelHolder` keeps one model and frees it on mode change. |
@@ -83,6 +85,15 @@ Component rules:
 
 The Gradio app uses the same palette through `make_theme()` and `GREEN_CSS` in `app.py`. The
 design canvas has the matching screens: Add a lecture, Check the subtitles, Watch with subtitles.
+
+## Courses on disk
+
+```
+<workspace>/<course>/ course.json glossary.csv lectures/ lessons/ outputs/<item>/ .trash/
+```
+
+The app must allow the workspace folder for file serving (`allowed_paths`), or downloads from
+it would be refused.
 
 ## Not built yet
 

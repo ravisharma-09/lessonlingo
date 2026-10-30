@@ -6,7 +6,7 @@ Before the demo (online, once): `lessonlingo setup`, then
 `python scripts/smoke_video.py lecture.mp4` to warm up and confirm the GPU.
 
 1. **Problem (20s).** Great lectures are in English. Many students learn in Kannada, Hindi, Tamil.
-2. **Open the app (10s).** Run `scripts\run_demo.ps1` (checks the models, loads one in the background, opens http://127.0.0.1:7860). Lecture video tab.
+2. **Open the app (10s).** Run `scripts\run_demo.ps1` (checks the models, loads one in the background, opens http://127.0.0.1:7860). My courses tab: open the course with two lectures and one lesson already added, press Translate everything (or use the Lecture video tab for a single file).
 3. **Go offline (15s).** Turn Wi-Fi off on stage. The models are already on this laptop.
 4. **Translate (60s).** Drop in the 60-90 second lecture clip. Pick Kannada and Hindi. Click Translate lecture. Name the stages as they pass: listening, translating.
 5. **Play it (40s).** Choose the language and play the video with subtitles. Download the `.srt`.
