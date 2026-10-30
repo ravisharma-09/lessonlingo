@@ -268,11 +268,11 @@ The source language is always English (`eng_Latn`).
 
 | Mode | Model | Device | Default batch | Load time | Seconds/sentence |
 | --- | --- | --- | ---: | ---: | ---: |
-| Quality | IndicTrans2 En-Indic 1B | CUDA GPU (RTX 4070 laptop) | 8 | 8.9 s | 0.08 s |
-| Light | IndicTrans2 En-Indic 200M | CUDA GPU (RTX 4070 laptop) | 16 | 5.2 s | 0.08 s |
+| Quality | IndicTrans2 En-Indic 1B | CUDA GPU (RTX 4070 laptop) | 8 | 7.7 to 8.9 s | 0.08 s |
+| Light | IndicTrans2 En-Indic 200M | CUDA GPU (RTX 4070 laptop) | 16 | 5.2 to 5.8 s | 0.08 to 0.14 s |
 | Light | IndicTrans2 En-Indic 200M | CPU only (same laptop) | 16 | 6.2 s | 0.55 s |
 
-Measured with `scripts/smoke.py` on the Windows test laptop (4 sentences into Hindi, Kannada and
+Two runs each, measured with `scripts/smoke.py` on the Windows test laptop (4 sentences into Hindi, Kannada and
 Tamil, offline flag on). Load time includes the first sentence. A full `scripts/bench.py` run
 writes `docs/benchmarks.md`.
 
@@ -349,6 +349,15 @@ The full script is in [docs/DEMO.md](docs/DEMO.md). Short version:
 - Speech recognition can mishear technical terms, so review subtitles before publishing.
 - Subtitles are added as selectable tracks (`--embed`), not burned into the picture.
 - Real model loading and generated-language quality are not verified on the Mac.
+
+## Measured end to end
+
+On the same laptop (RTX 4070 laptop GPU, offline flag on), the 61-second sample lecture went from
+video to Kannada, Hindi and Tamil subtitles in 12.4 s with Whisper `small` and the light model.
+A course of three files (that lecture, a lesson and a subtitle file) translated into Kannada and
+Hindi in 11.2 s. Speech recognition made two clear mistakes on the synthetic narration
+("Plants also flay a fart", "the second Akichurtha"), which is why the English transcript can be
+corrected before translating. GPU memory during a run has not been measured properly yet.
 
 ## Sample files
 
