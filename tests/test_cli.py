@@ -2,8 +2,9 @@ from pathlib import Path
 from typing import Any
 
 import huggingface_hub
+import pytest
 
-from lessonlingo import cli
+from lessonlingo import cli, setup_models
 
 
 def test_download_models_fetches_both_safetensors_snapshots() -> None:
@@ -13,7 +14,7 @@ def test_download_models_fetches_both_safetensors_snapshots() -> None:
         calls.append(kwargs)
         return "/fake/model"
 
-    cli.download_models(fake_snapshot_download, Path("models"))
+    setup_models.download_models(fake_snapshot_download, Path("models"))
 
     assert [call["repo_id"] for call in calls] == [
         "ai4bharat/indictrans2-en-indic-1B",
@@ -30,7 +31,7 @@ def test_verify_models_uses_local_files_only() -> None:
         calls.append(kwargs)
         return "/fake/model"
 
-    cli.verify_models(fake_snapshot_download)
+    setup_models.verify_models(fake_snapshot_download)
 
     assert len(calls) == 2
     assert all(call["local_files_only"] is True for call in calls)
@@ -40,20 +41,20 @@ def test_enable_offline_mode_sets_library_guards(monkeypatch: Any) -> None:
     monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
     monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
 
-    cli.enable_offline_mode()
+    setup_models.enable_offline_mode()
 
-    assert cli.os.environ["HF_HUB_OFFLINE"] == "1"
-    assert cli.os.environ["TRANSFORMERS_OFFLINE"] == "1"
+    assert setup_models.os.environ["HF_HUB_OFFLINE"] == "1"
+    assert setup_models.os.environ["TRANSFORMERS_OFFLINE"] == "1"
 
 
 def test_online_setup_clears_offline_guards(monkeypatch: Any) -> None:
     monkeypatch.setenv("HF_HUB_OFFLINE", "1")
     monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
 
-    cli.enable_online_setup()
+    setup_models.enable_online_setup()
 
-    assert "HF_HUB_OFFLINE" not in cli.os.environ
-    assert "TRANSFORMERS_OFFLINE" not in cli.os.environ
+    assert "HF_HUB_OFFLINE" not in setup_models.os.environ
+    assert "TRANSFORMERS_OFFLINE" not in setup_models.os.environ
 
 
 def test_setup_logs_in_and_downloads_all_models(monkeypatch: Any) -> None:
@@ -68,6 +69,16 @@ def test_setup_logs_in_and_downloads_all_models(monkeypatch: Any) -> None:
         lambda **kwargs: download_calls.append(kwargs) or "/fake/model",
     )
 
-    assert cli.run_setup() == 0
+    assert setup_models.run_setup() == 0
     assert login_calls == [True]
     assert len(download_calls) == 2
+
+
+def test_cli_help_uses_approved_offline_wording(capsys: Any) -> None:
+    """Public CLI copy describes the required one-time setup."""
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(["--help"])
+
+    assert exit_info.value.code == 0
+    assert "Set up once, then no internet needed" in capsys.readouterr().out

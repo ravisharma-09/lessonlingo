@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 dependencies = [
-  "huggingface-hub>=0.26,<2",
+  "torch",
+  "transformers==4.46.1",
+  "indictranstoolkit==1.1.1",
 ]
 
 [project.scripts]
@@ -20,4 +22,14 @@ lessonlingo = "lessonlingo.cli:main"
 where = ["src"]
 
 [tool.pytest.ini_options]
+markers = [
+  "gpu: requires the real light model and a CUDA-capable test laptop",
+]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
