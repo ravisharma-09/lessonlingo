@@ -88,7 +88,25 @@ def download_whisper(
     )
 
 
-def run_setup(cache_dir: Path | None = None) -> int:
+def download_voices(
+    snapshot_download: SnapshotDownload,
+    languages: list[str],
+    cache_dir: Path | None = None,
+    local_only: bool = False,
+) -> None:
+    """Download (or check in the local cache) the optional spoken voices."""
+
+    from lessonlingo.tts import voice_repository
+
+    for language in languages:
+        snapshot_download(
+            repo_id=voice_repository(language),
+            cache_dir=str(cache_dir) if cache_dir else None,
+            local_files_only=local_only,
+        )
+
+
+def run_setup(cache_dir: Path | None = None, voices: list[str] | None = None) -> int:
     """Authenticate when needed and download all required models once."""
 
     enable_online_setup()
@@ -113,6 +131,9 @@ def run_setup(cache_dir: Path | None = None) -> int:
 
     print("Downloading speech model for lecture videos (about 0.5 GB)")
     download_whisper(snapshot_download, cache_dir)
+    if voices:
+        print("Downloading optional voices (non-commercial licence): " + ", ".join(voices))
+        download_voices(snapshot_download, voices, cache_dir)
     print("Setup complete. Models and dependencies are now available on this device.")
     print("After setup, translating lessons needs no internet connection.")
     return 0

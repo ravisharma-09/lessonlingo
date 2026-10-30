@@ -218,3 +218,28 @@ def test_course_commands_create_add_translate_and_report(
 def test_course_command_rejects_unsafe_names(tmp_path: Path) -> None:
     with pytest.raises(SystemExit):
         cli.main(["course", "new", "../evil", "--workspace", str(tmp_path)])
+
+
+def test_video_dub_flag_writes_wav_files_with_a_fake_voice(tmp_path: Path) -> None:
+    from lessonlingo.tts import FakeSynthesizer
+
+    talk = tmp_path / "talk.srt"
+    talk.write_text("1\n00:00:00,000 --> 00:00:02,000\nHello class.\n", encoding="utf-8")
+
+    code = cli.main(
+        ["video", str(talk), "--to", "kan_Knda", "--dub", "--out", str(tmp_path / "o")],
+        FakeTranslator(),
+        synthesizer_factory=FakeSynthesizer,
+    )
+
+    assert code == 0
+    assert (tmp_path / "o" / "talk.kan_Knda.wav").is_file()
+    assert not (tmp_path / "o" / "talk.dubbed.mp4").exists()  # an .srt input has no picture
+
+
+def test_setup_voices_use_the_voice_repositories() -> None:
+    calls: list[dict[str, object]] = []
+
+    setup_models.download_voices(lambda **kw: calls.append(kw) or "x", ["kan_Knda", "hin_Deva"])
+
+    assert [c["repo_id"] for c in calls] == ["facebook/mms-tts-kan", "facebook/mms-tts-hin"]

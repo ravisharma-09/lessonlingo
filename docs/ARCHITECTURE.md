@@ -54,6 +54,7 @@ flowchart LR
 | `video.py` | `Transcriber`, `FakeTranscriber`, `FasterWhisperTranscriber`, `extract_audio`, `translate_video`, `embed_subtitles` | Status callback reports each stage. |
 | `workspace.py` | `Workspace(root)`, `create_course`, `add_file`, `list_items`, `translate_course`, `trash_item`, `course_pack` | Courses on disk. Lectures are all transcribed first, then all translated. |
 | `library.py` | `build_library_tab(...)` | The My courses tab. |
+| `tts.py` | `Synthesizer`, `FakeSynthesizer`, `MMSSynthesizer`, `render_dub`, `add_dubbed_audio` | Optional spoken dubbing (MMS voices, non-commercial licence). CLI only. |
 | `pack.py` | `make_class_pack(files, zip_path)` | Zip with START_HERE.txt for sharing. |
 | `setup_models.py` | `run_setup`, `run_verify`, `enable_offline_mode` | Downloads IndicTrans2 1B and 200M plus the Whisper model. |
 | `app.py` | `build_app(holder, transcriber_factory)`, `run_translation`, `run_video_job`, `review_rows`, `save_review`, `ModelHolder` | Gradio UI. `ModelHolder` keeps one model and frees it on mode change. |

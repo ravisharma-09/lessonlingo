@@ -205,6 +205,25 @@ items are skipped next time. Removing a file moves it to `.trash/`; nothing is d
 permanently. Course settings hold the languages, the run mode and an optional glossary. The
 course pack zip collects every translated file.
 
+### Spoken dubbing (optional, non-commercial voices)
+
+`--dub` also speaks each translated subtitle line and adds the voice as an extra audio track
+(`<name>.dubbed.mp4`, the original sound stays as track 1) plus one `.wav` per language:
+
+```powershell
+lessonlingo setup --voices kan_Knda hin_Deva      # once, while online
+lessonlingo video .\lecture.mp4 --to kan_Knda --dub --offline
+```
+
+The voices are Meta's MMS-TTS models, run locally through the `transformers` library we already
+use. **Their licence is CC-BY-NC 4.0 (non-commercial use only)**, which is why dubbing is off by
+default and the voices are not part of the normal `lessonlingo setup`. Spoken lines that are
+longer than their subtitle slot are sped up by at most 1.3 times; after that the voice falls
+slightly behind the picture and the command prints the delay. Whether a voice exists for each of
+the ten languages has not been checked; a missing one reports a clear error. This feature is
+tested with a fake voice on the development machine; the real voices must be tried on the GPU
+laptop. It is not in the web app yet.
+
 ### Course glossary, transcript check and class pack
 
 - **Check the English first.** In the Lecture video tab, press Listen, fix any mistakes in the

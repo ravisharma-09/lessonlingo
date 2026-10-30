@@ -12,7 +12,9 @@ from lessonlingo.languages import SUPPORTED_LANGUAGES
 from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_file, translate_folder
 from lessonlingo.setup_models import enable_offline_mode, run_setup, run_verify
+from lessonlingo.subtitles import load_subtitles
 from lessonlingo.translator import IndicTransTranslator, Translator
+from lessonlingo.tts import MMSSynthesizer, Synthesizer, add_dubbed_audio, render_dub
 from lessonlingo.video import FasterWhisperTranscriber, Transcriber
 from lessonlingo.workspace import DEFAULT_TARGETS, Workspace
 
@@ -93,6 +95,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also write <name>.subtitled.mp4 with every language as a selectable subtitle track",
     )
+    video_parser.add_argument(
+        "--dub",
+        action="store_true",
+        help="also speak the translation (MMS voices, non-commercial licence; see README)",
+    )
     video_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
     video_parser.add_argument("--keep", nargs="+", default=[], metavar="TERM", help=KEEP_HELP)
     video_parser.add_argument("--glossary", type=Path, help=GLOSSARY_HELP)
@@ -120,6 +127,13 @@ def build_parser() -> argparse.ArgumentParser:
     setup_parser = subparsers.add_parser(
         "setup",
         help="download models once for later translation without internet",
+    )
+    setup_parser.add_argument(
+        "--voices",
+        nargs="+",
+        choices=SUPPORTED_LANGUAGES,
+        metavar="LANG",
+        help="also download the optional spoken voices for these languages",
     )
     setup_parser.add_argument(
         "--cache-dir",
@@ -239,7 +253,34 @@ def _run_translate(args: argparse.Namespace, translator: Translator | None) -> i
     return 0
 
 
-def _run_video(args: argparse.Namespace, translator: Translator | None) -> int:
+def _dub(
+    args: argparse.Namespace, paths: list[Path], synthesizer_factory: Callable[[], Synthesizer]
+) -> None:
+    """Speak each translated subtitle file; add the voices to the video when it is a video."""
+
+    synthesizer = synthesizer_factory()
+    tracks: dict[str, Path] = {}
+    try:
+        for srt in (p for p in paths if p.suffix == ".srt"):
+            code = srt.name.split(".")[-2]
+            if code == "en":
+                continue
+            wav, delay = render_dub(load_subtitles(srt), code, synthesizer, srt.with_suffix(".wav"))
+            print(wav)
+            if delay > 1:
+                print(f"Note: the {code} voice runs up to {delay:.1f}s behind the picture.")
+            tracks[code] = wav
+    finally:
+        synthesizer.close()
+    if args.file.suffix.lower() in {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"} and tracks:
+        print(add_dubbed_audio(args.file, tracks, args.out / f"{args.file.stem}.dubbed.mp4"))
+
+
+def _run_video(
+    args: argparse.Namespace,
+    translator: Translator | None,
+    synthesizer_factory: Callable[[], Synthesizer] = MMSSynthesizer,
+) -> int:
     from lessonlingo.video import FasterWhisperTranscriber, translate_video
 
     inner = translator or IndicTransTranslator(args.mode)
@@ -261,6 +302,8 @@ def _run_video(args: argparse.Namespace, translator: Translator | None) -> int:
             backend.close()
     for output_path in paths:
         print(output_path)
+    if args.dub:
+        _dub(args, paths, synthesizer_factory)
     if args.embed:
         from lessonlingo.video import embed_subtitles
 
@@ -319,6 +362,7 @@ def main(
     argv: Sequence[str] | None = None,
     translator: Translator | None = None,
     transcriber_factory: Callable[..., Transcriber] = FasterWhisperTranscriber,
+    synthesizer_factory: Callable[[], Synthesizer] = MMSSynthesizer,
 ) -> int:
     """Run LessonLingo, optionally injecting fake backends for tests."""
 
@@ -338,11 +382,11 @@ def main(
             launch(port=args.port, warm=args.warm, lan=args.lan, workspace_root=args.workspace)
             return 0
         if args.command == "video":
-            return _run_video(args, translator)
+            return _run_video(args, translator, synthesizer_factory)
         if args.command == "translate":
             return _run_translate(args, translator)
         if args.command == "setup":
-            return run_setup(args.cache_dir)
+            return run_setup(args.cache_dir, args.voices)
         if args.command == "verify":
             return run_verify(args.cache_dir)
         for code, name in SUPPORTED_LANGUAGES.items():
