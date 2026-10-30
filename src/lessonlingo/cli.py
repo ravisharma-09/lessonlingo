@@ -60,6 +60,22 @@ def build_parser() -> argparse.ArgumentParser:
     translate_parser.add_argument("--device", help="override automatic cuda/cpu selection")
     translate_parser.add_argument("--batch-size", type=int, help="override the mode batch size")
 
+    video_parser = subparsers.add_parser(
+        "video",
+        help="turn a lecture video (or .srt/.vtt) into translated subtitles",
+    )
+    video_parser.add_argument("file", type=Path, help="English lecture video/audio or .srt/.vtt")
+    video_parser.add_argument(
+        "--to", nargs="+", required=True, choices=SUPPORTED_LANGUAGES, metavar="LANG"
+    )
+    video_parser.add_argument("--mode", choices=("quality", "light"), default="light")
+    video_parser.add_argument(
+        "--whisper", default="small", help="speech model size (default: small)"
+    )
+    video_parser.add_argument("--whisper-device", help="cuda or cpu for speech recognition")
+    video_parser.add_argument("--out", type=Path, default=Path("outputs"))
+    video_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
+
     app_parser = subparsers.add_parser("app", help="open the web interface on this computer")
     app_parser.add_argument("--port", type=int, default=7860, help="port (default: 7860)")
     app_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
@@ -117,6 +133,23 @@ def _run_translate(args: argparse.Namespace, translator: Translator | None) -> i
     return 0
 
 
+def _run_video(args: argparse.Namespace, translator: Translator | None) -> int:
+    from lessonlingo.video import FasterWhisperTranscriber, translate_video
+
+    paths = translate_video(
+        args.file,
+        args.to,
+        args.mode,
+        args.out,
+        transcriber=FasterWhisperTranscriber(args.whisper, args.whisper_device),
+        translator=translator,
+        status=print,
+    )
+    for output_path in paths:
+        print(output_path)
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
     translator: Translator | None = None,
@@ -126,13 +159,15 @@ def main(
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        if args.command in {"translate", "app"} and _offline_requested(args.offline):
+        if args.command in {"translate", "app", "video"} and _offline_requested(args.offline):
             enable_offline_mode()
         if args.command == "app":
             from lessonlingo.app import launch
 
             launch(port=args.port)
             return 0
+        if args.command == "video":
+            return _run_video(args, translator)
         if args.command == "translate":
             return _run_translate(args, translator)
         if args.command == "setup":

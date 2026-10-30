@@ -122,3 +122,18 @@ def test_translate_command_reports_missing_file(capsys: Any) -> None:
 
     assert exit_info.value.code == 2
     assert "Lesson file not found" in capsys.readouterr().err
+
+
+def test_video_command_translates_an_srt_file(tmp_path: Path) -> None:
+    lecture = tmp_path / "talk.srt"
+    lecture.write_text("1\n00:00:00,000 --> 00:00:02,000\nHello class.\n", encoding="utf-8")
+
+    code = cli.main(
+        ["video", str(lecture), "--to", "hin_Deva", "--out", str(tmp_path / "o")],
+        FakeTranslator(),
+    )
+
+    assert code == 0
+    assert "[hin_Deva] Hello class." in (tmp_path / "o" / "talk.hin_Deva.srt").read_text(
+        encoding="utf-8"
+    )
