@@ -160,6 +160,15 @@ python scripts/smoke.py --mode light --offline
 python scripts/bench.py   # writes docs/benchmarks.md
 ```
 
+### Review and keep-in-English
+
+In the web UI, the Text lesson tab shows English and the translation side by side after
+translating. Click a translation cell to fix it, then press Save my edits to download the
+corrected file. Type words such as `photosynthesis, Python` in the keep-in-English box (or
+use `--keep photosynthesis Python` on the command line) to leave them untranslated. Kept
+words are swapped for placeholders during translation; if the model drops a placeholder,
+that sentence is translated again without protection.
+
 ## Supported languages
 
 | Code | Language |
@@ -261,6 +270,13 @@ The full script is in [docs/DEMO.md](docs/DEMO.md). Short version:
 - Subtitles are not burned into the video; use the `.vtt`/`.srt` with any player.
 - Real model loading and generated-language quality are not verified on the Mac.
 
+## AI tools used
+
+This project was written with AI coding assistants: OpenAI Codex (initial repository,
+translation pipeline and CLI) and Anthropic Claude Code (web UI, lecture video flow,
+glossary, review table, documentation). Every team member can explain the code.
+Translation itself uses open models only (IndicTrans2, Whisper), run locally.
+
 ## Credits and licences
 
 LessonLingo is licensed under the [MIT License](LICENSE).
@@ -268,5 +284,6 @@ LessonLingo is licensed under the [MIT License](LICENSE).
 Translation uses
 [IndicTrans2 by AI4Bharat](https://github.com/AI4Bharat/IndicTrans2) and
 [IndicTransToolkit](https://github.com/VarunGumma/IndicTransToolkit), both
-distributed under MIT licences. IndicTrans2 model access remains subject to
+distributed under MIT licences. Speech recognition uses
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) (MIT) with OpenAI Whisper weights. IndicTrans2 model access remains subject to
 the terms displayed on each Hugging Face model page.
