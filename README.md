@@ -189,6 +189,15 @@ Science 8/
   course.json   glossary.csv   lectures/   lessons/   outputs/   .trash/
 ```
 
+The same thing from the command line:
+
+```powershell
+lessonlingo course new "Science 8" --to kan_Knda hin_Deva
+lessonlingo course add "Science 8" .\unit1.mp4 .\notes.md
+lessonlingo course status "Science 8"
+lessonlingo course translate "Science 8" --offline
+```
+
 Create a course, add videos, audio, `.srt` files and lessons (they are sorted into `lectures/`
 and `lessons/`), then press Translate everything. All lectures are transcribed first and then
 everything is translated, so the speech and translation models never share the GPU. Finished
