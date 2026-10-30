@@ -169,6 +169,9 @@ use `--keep photosynthesis Python` on the command line) to leave them untranslat
 words are swapped for placeholders during translation; if the model drops a placeholder,
 that sentence is translated again without protection.
 
+The data flow, module interfaces and UI system are described in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Supported languages
 
 | Code | Language |
