@@ -10,8 +10,11 @@ students who need local access to English-only educational material.
 
 ## Project status
 
-Phases 1 and 2 provide the translation pipeline, the command-line interface and
-a Gradio web page (`lessonlingo app`). Video subtitles are not built yet. Unit
+LessonLingo translates text lessons and English lecture videos. The video flow
+(`lessonlingo video`, or the Lecture video tab in `lessonlingo app`) extracts audio
+with ffmpeg, transcribes it with faster-whisper, frees the speech model, then
+translates each subtitle with IndicTrans2 and writes `.srt` and `.vtt` files.
+The video flow is tested with fakes on the Mac and still needs a real run on the GPU laptop. Unit
 tests use a deterministic fake translator and never download model files.
 
 ## What "offline" means
@@ -30,7 +33,8 @@ internet connection.
   [quality (1B)](https://huggingface.co/ai4bharat/indictrans2-en-indic-1B)
   and
   [light (200M)](https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M).
-- Approximately 4.5 GB for the quality weights and 1.1 GB for the light
+- ffmpeg on your PATH for lecture videos (Windows: `winget install ffmpeg`).
+- Approximately 0.5 GB for the speech model, 4.5 GB for the quality weights and 1.1 GB for the light
   weights, plus cache and installation overhead. The setup command downloads
   both modes.
 - An NVIDIA GPU with a CUDA-enabled PyTorch installation for quality mode.
@@ -127,6 +131,16 @@ lessonlingo translate .\samples\lesson_en.md `
 
 Output names follow `<source>.<language-code>.md`, for example
 `lesson_en.hin_Deva.md`.
+
+### Lecture videos
+
+```powershell
+lessonlingo video .\lecture.mp4 --to kan_Knda hin_Deva --mode light --offline --out .\outputs
+```
+
+This writes `lecture.en.srt` plus `lecture.<lang>.srt` and `.vtt` per language. An
+existing `.srt`/`.vtt` file also works and skips speech recognition. If the speech model
+fails on CUDA, add `--whisper-device cpu`.
 
 ### Web UI
 
@@ -243,7 +257,8 @@ The full script is in [docs/DEMO.md](docs/DEMO.md). Short version:
   educational material before it is published or taught.
 - Sentence segmentation is intentionally simple and dependency-light.
 - Quality mode requires CUDA and may not fit every GPU configuration.
-- Video subtitle support is not implemented yet.
+- Speech recognition can mishear technical terms, so review subtitles before publishing.
+- Subtitles are not burned into the video; use the `.vtt`/`.srt` with any player.
 - Real model loading and generated-language quality are not verified on the Mac.
 
 ## Credits and licences
