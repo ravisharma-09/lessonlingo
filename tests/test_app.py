@@ -139,3 +139,18 @@ def test_warm_up_loads_the_model_once() -> None:
             break
         time.sleep(0.02)
     assert holder._translator is not None
+
+
+def test_transcript_rows_mark_doubtful_lines_and_edits_keep_timing() -> None:
+    from lessonlingo.app import cues_from_rows, transcript_rows
+    from lessonlingo.subtitles import Cue
+
+    cues = [Cue(0, 2.5, "Hello", -0.1), Cue(3, 5, "Wter cycle", -1.8)]
+
+    rows = transcript_rows(cues)
+    assert rows == [["00:00", "Hello", ""], ["00:03", "Wter cycle", "Check"]]
+    rows[1][1] = "Water cycle"
+    fixed = cues_from_rows(cues, rows)
+    assert fixed[1] == Cue(3, 5, "Water cycle", -1.8)
+    with pytest.raises(ValueError):
+        cues_from_rows(cues, rows[:1])

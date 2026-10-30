@@ -9,16 +9,26 @@ from __future__ import annotations
 import tempfile
 import threading
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from lessonlingo.glossary import GlossaryTranslator, parse_terms
+from lessonlingo.glossary import GlossaryTranslator, load_glossary, parse_terms
 from lessonlingo.languages import SUPPORTED_LANGUAGES, validate_targets
 from lessonlingo.markdown_io import Segment, rebuild
+from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_segments
+from lessonlingo.subtitles import Cue, format_timestamp
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
 from lessonlingo.ui_assets import HERO_HTML
-from lessonlingo.video import FasterWhisperTranscriber, Transcriber, translate_video
+from lessonlingo.video import (
+    FasterWhisperTranscriber,
+    Transcriber,
+    is_doubtful,
+    transcribe_lecture,
+    translate_lecture,
+    translate_video,
+)
 
 DEFAULT_TEXT = (
     "# Water Cycle\n\n"
@@ -191,6 +201,36 @@ def run_video_job(
     return [str(p) for p in written], vtt
 
 
+def glossary_from(
+    keep: str | None, sheet_path: str | None
+) -> tuple[list[str], dict[str, dict[str, str]]]:
+    """Terms to protect (typed words plus the glossary sheet) and preferred words per language."""
+
+    terms = parse_terms(keep)
+    preferred: dict[str, dict[str, str]] = {}
+    if sheet_path:
+        sheet_terms, preferred = load_glossary(Path(sheet_path))
+        terms += sheet_terms
+    return list(dict.fromkeys(terms)), preferred
+
+
+def transcript_rows(cues: list[Cue]) -> list[list[str]]:
+    """Rows of [time, heard text, "Check" when recognition was unsure] for the review table."""
+
+    return [
+        [format_timestamp(cue.start)[3:8], cue.text, "Check" if is_doubtful(cue) else ""]
+        for cue in cues
+    ]
+
+
+def cues_from_rows(cues: list[Cue], rows: list[list[str]]) -> list[Cue]:
+    """Apply the teacher's corrections to the heard text; timing never changes."""
+
+    if len(rows) != len(cues):
+        raise ValueError("Please do not add or delete rows in the transcript. Edit the text only.")
+    return [replace(cue, text=str(row[1]).strip() or cue.text) for cue, row in zip(cues, rows)]
+
+
 class ModelHolder:
     """Keeps one real translator alive and frees it when the mode changes."""
 
@@ -222,7 +262,7 @@ class ModelHolder:
 
 def build_app(
     holder: ModelHolder | None = None,
-    transcriber_factory: Callable[[], Transcriber] = FasterWhisperTranscriber,
+    transcriber_factory: Callable[..., Transcriber] = FasterWhisperTranscriber,
 ) -> Any:
     """Build the Gradio Blocks app. Pass a holder with FakeTranslator for tests."""
 
@@ -230,9 +270,11 @@ def build_app(
 
     models = holder or ModelHolder()
 
-    def with_glossary(translator: Translator, keep: str | None) -> Translator:
-        terms = parse_terms(keep)
-        return GlossaryTranslator(translator, terms) if terms else translator
+    def with_glossary(
+        translator: Translator, keep: str | None, sheet: str | None = None
+    ) -> Translator:
+        terms, preferred = glossary_from(keep, sheet)
+        return GlossaryTranslator(translator, terms, preferred) if terms else translator
 
     def on_translate(
         text: str,
@@ -240,6 +282,7 @@ def build_app(
         targets: list[str],
         mode: Mode,
         keep: str,
+        sheet: str | None,
         progress: Any = None,
     ) -> tuple[Any, ...]:
         if not targets:
@@ -256,7 +299,7 @@ def build_app(
                 upload,
                 targets,
                 mode,
-                with_glossary(models.get(mode), keep),
+                with_glossary(models.get(mode), keep, sheet),
                 progress_cb=report,
             )
             stem = read_source(text, upload)[1]
@@ -264,9 +307,10 @@ def build_app(
             raise gr.Error(friendly_error(error)) from error
         first = next(iter(docs))
         review = {"stem": stem, "docs": docs}
+        pack = make_class_pack([Path(p) for p in paths], Path(paths[0]).parent / f"{stem}.zip")
         return (
             f"Done. {len(paths)} file(s) ready. Check each line below, fix any, then save.",
-            paths,
+            [*paths, str(pack)],
             preview,
             review,
             gr.Dropdown(
@@ -289,28 +333,68 @@ def build_app(
 
     language_choices = [(f"{name} ({code})", code) for code, name in SUPPORTED_LANGUAGES.items()]
 
-    def on_video(
-        upload: str | None, targets: list[str], mode: Mode, keep: str, progress: Any = None
+    def on_listen(
+        upload: str | None, keep: str, sheet: str | None, progress: Any = None
     ) -> tuple[Any, ...]:
-        if not targets:
-            raise gr.Error("Pick at least one language.")
+        if not upload:
+            raise gr.Error("Add a lecture video, audio file or .srt first.")
         progress = progress or gr.Progress()
         models.close()  # free the GPU before the speech model loads
         try:
-            files, vtt = run_video_job(
-                upload,
-                targets,
-                mode,
-                with_glossary(models.get(mode), keep),
-                transcriber_factory(),
+            terms, _ = glossary_from(keep, sheet)
+            cues = transcribe_lecture(
+                Path(upload),
+                transcriber_factory(hotwords=terms),
                 status=lambda message: progress(None, desc=message),
             )
         except (ValueError, FileNotFoundError, RuntimeError) as error:
             raise gr.Error(friendly_error(error)) from error
+        doubtful = sum(is_doubtful(cue) for cue in cues)
+        note = f" {doubtful} line(s) marked Check may be wrong." if doubtful else ""
+        return (
+            f"Heard {len(cues)} lines.{note} Fix any mistakes in the English, then translate.",
+            {"cues": cues},
+            gr.Dataframe(value=transcript_rows(cues), visible=True),
+            gr.Button(visible=True),
+        )
+
+    def on_translate_video(
+        upload: str | None,
+        heard: dict[str, Any],
+        rows: Any,
+        targets: list[str],
+        mode: Mode,
+        keep: str,
+        sheet: str | None,
+        progress: Any = None,
+    ) -> tuple[Any, ...]:
+        if not targets:
+            raise gr.Error("Pick at least one language.")
+        if not heard or not upload:
+            raise gr.Error("Listen to the lecture first.")
+        progress = progress or gr.Progress()
+        table = rows.values.tolist() if hasattr(rows, "values") else rows
+        try:
+            cues = cues_from_rows(heard["cues"], table)
+            folder = Path(tempfile.mkdtemp(prefix="lessonlingo_video_"))
+            stem = Path(upload).stem
+            written = translate_lecture(
+                cues,
+                stem,
+                targets,
+                mode,
+                folder,
+                with_glossary(models.get(mode), keep, sheet),
+                status=lambda message: progress(None, desc=message),
+            )
+            pack = make_class_pack(written, folder / f"{stem}.classpack.zip")
+        except (ValueError, FileNotFoundError, RuntimeError) as error:
+            raise gr.Error(friendly_error(error)) from error
+        vtt = {p.name.split(".")[-2]: str(p) for p in written if p.suffix == ".vtt"}
         first = next(iter(vtt))
         return (
-            f"Done. {len(files)} subtitle files ready.",
-            files,
+            f"Done. {len(written)} subtitle files and a class pack are ready.",
+            [*map(str, written), str(pack)],
             vtt,
             gr.Dropdown(
                 choices=[(SUPPORTED_LANGUAGES[c], c) for c in vtt], value=first, visible=True
@@ -351,17 +435,39 @@ def build_app(
                 label="Keep these words in English (optional, separated by commas)",
                 placeholder="photosynthesis, Python",
             )
-            v_go = gr.Button("Translate lecture", variant="primary", size="lg")
+            v_sheet = gr.File(
+                label="Course glossary (optional .csv: term, then the exact word per language)",
+                file_types=[".csv"],
+                type="filepath",
+            )
+            v_listen = gr.Button("1. Listen to the lecture", variant="primary", size="lg")
             v_status = gr.Markdown()
+            v_heard = gr.State({})
+            v_table = gr.Dataframe(
+                headers=["Time", "Heard (click a cell to fix mistakes)", "Check"],
+                datatype=["str", "str", "str"],
+                static_columns=[0, 2],
+                interactive=True,
+                wrap=True,
+                visible=False,
+                type="array",
+            )
+            v_go = gr.Button("2. Translate", variant="primary", size="lg", visible=False)
             v_state = gr.State({})
             v_lang = gr.Dropdown(label="Watch with subtitles in", choices=[], visible=False)
             v_player = gr.Video(label="Lecture", interactive=False)
             v_files = gr.File(
-                label="Download subtitle files (.srt and .vtt)", file_count="multiple"
+                label="Download subtitles (.srt, .vtt) and the class pack (.zip)",
+                file_count="multiple",
+            )
+            v_listen.click(
+                on_listen,
+                [v_upload, v_keep, v_sheet],
+                [v_status, v_heard, v_table, v_go],
             )
             v_go.click(
-                on_video,
-                [v_upload, v_targets, v_mode, v_keep],
+                on_translate_video,
+                [v_upload, v_heard, v_table, v_targets, v_mode, v_keep, v_sheet],
                 [v_status, v_files, v_state, v_lang, v_player],
             )
             v_lang.change(on_language, [v_upload, v_state, v_lang], v_player)
@@ -387,6 +493,11 @@ def build_app(
                 label="Keep these words in English (optional, separated by commas)",
                 placeholder="photosynthesis, Python",
             )
+            sheet = gr.File(
+                label="Course glossary (optional .csv: term, then the exact word per language)",
+                file_types=[".csv"],
+                type="filepath",
+            )
             go = gr.Button("Translate lesson", variant="primary", size="lg", elem_id="go")
             status = gr.Markdown()
             files = gr.File(label="Download one file per language", file_count="multiple")
@@ -406,7 +517,7 @@ def build_app(
             preview = gr.Textbox(label="Preview", lines=12, interactive=False)
             go.click(
                 on_translate,
-                [text, upload, targets, mode, keep],
+                [text, upload, targets, mode, keep, sheet],
                 [status, files, preview, review_state, review_lang, review_table, save_btn],
             )
             review_lang.change(on_review_language, [review_state, review_lang], review_table)
