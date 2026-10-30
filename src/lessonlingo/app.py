@@ -243,13 +243,18 @@ def glossary_from(
     return list(dict.fromkeys(terms)), preferred
 
 
+def check_note(cue: Cue) -> str:
+    """What the Check column shows: the doubtful words, or just "Check" for a doubtful line."""
+
+    if cue.weak_words:
+        return "Check: " + ", ".join(cue.weak_words)
+    return "Check" if is_doubtful(cue) else ""
+
+
 def transcript_rows(cues: list[Cue]) -> list[list[str]]:
     """Rows of [time, heard text, "Check" when recognition was unsure] for the review table."""
 
-    return [
-        [format_timestamp(cue.start)[3:8], cue.text, "Check" if is_doubtful(cue) else ""]
-        for cue in cues
-    ]
+    return [[format_timestamp(cue.start)[3:8], cue.text, check_note(cue)] for cue in cues]
 
 
 def cues_from_rows(cues: list[Cue], rows: list[list[str]]) -> list[Cue]:

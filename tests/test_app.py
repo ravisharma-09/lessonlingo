@@ -147,10 +147,18 @@ def test_transcript_rows_mark_doubtful_lines_and_edits_keep_timing() -> None:
     from lessonlingo.app import cues_from_rows, transcript_rows
     from lessonlingo.subtitles import Cue
 
-    cues = [Cue(0, 2.5, "Hello", -0.1), Cue(3, 5, "Wter cycle", -1.8)]
+    cues = [
+        Cue(0, 2.5, "Hello", -0.1),
+        Cue(3, 5, "Wter cycle", -1.8),
+        Cue(6, 8, "Plants flay a fart", -0.3, ("flay", "fart")),
+    ]
 
     rows = transcript_rows(cues)
-    assert rows == [["00:00", "Hello", ""], ["00:03", "Wter cycle", "Check"]]
+    assert rows == [
+        ["00:00", "Hello", ""],
+        ["00:03", "Wter cycle", "Check"],
+        ["00:06", "Plants flay a fart", "Check: flay, fart"],
+    ]
     rows[1][1] = "Water cycle"
     fixed = cues_from_rows(cues, rows)
     assert fixed[1] == Cue(3, 5, "Water cycle", -1.8)

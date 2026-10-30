@@ -22,6 +22,7 @@ def test_doubtful_lines_are_flagged_from_the_score() -> None:
     assert is_doubtful(Cue(0, 1, "x", -1.6))
     assert not is_doubtful(Cue(0, 1, "x", -0.2))
     assert not is_doubtful(Cue(0, 1, "x"))
+    assert is_doubtful(Cue(0, 1, "x", -0.2, ("flay",)))
 
 
 def test_listen_then_translate_lets_the_teacher_fix_the_transcript(
@@ -39,3 +40,11 @@ def test_listen_then_translate_lets_the_teacher_fix_the_transcript(
 
     text = (tmp_path / "talk.hin_Deva.srt").read_text(encoding="utf-8")
     assert "WATER cycle" in text and len(paths) == 3
+
+
+def test_weak_words_come_from_low_probability_words() -> None:
+    from lessonlingo.video import weak_words_of
+
+    words = [(" Plants", 0.97), (" also", 0.9), (" flay,", 0.31), (" a", 0.8), (" fart.", 0.22)]
+
+    assert weak_words_of(words) == ("flay", "fart")

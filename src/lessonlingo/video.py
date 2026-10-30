@@ -27,12 +27,24 @@ VIDEO_SUFFIXES = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v", ".mp3", ".wav
 
 
 DOUBTFUL_SCORE = -1.0
+WEAK_WORD_PROBABILITY = 0.5  # a starting guess; tune it with scripts/show_scores.py
 
 
 def is_doubtful(cue: Cue) -> bool:
-    """True when speech recognition was unsure about this line (low average log-probability)."""
+    """True when speech recognition was unsure: a weak word, or a low average log-probability."""
 
-    return cue.score is not None and cue.score < DOUBTFUL_SCORE
+    return bool(cue.weak_words) or (cue.score is not None and cue.score < DOUBTFUL_SCORE)
+
+
+def weak_words_of(words: list[tuple[str, float]]) -> tuple[str, ...]:
+    """Words whose recognition probability is below the threshold, without punctuation."""
+
+    found = (
+        word.strip(" ,.;:!?\"'()")
+        for word, probability in words
+        if probability < WEAK_WORD_PROBABILITY
+    )
+    return tuple(w for w in found if w)
 
 
 def whisper_repository(size: str) -> str:
@@ -60,7 +72,9 @@ class FakeTranscriber:
         self.hotwords = hotwords
         self.cues = cues or [
             Cue(0.0, 2.5, "Welcome to today's lesson.", -0.2),
-            Cue(2.5, 6.0, "Water moves between the land, oceans, and atmosphere.", -1.6),
+            Cue(
+                2.5, 6.0, "Water moves between the land, oceans, and atmosphere.", -0.4, ("oceans",)
+            ),
             Cue(6.0, 9.0, "This is called the water cycle.", -0.3),
         ]
 
@@ -123,9 +137,18 @@ class FasterWhisperTranscriber:
             language="en",
             vad_filter=True,
             hotwords=", ".join(self.hotwords) or None,
+            word_timestamps=True,
         )
         return [
-            Cue(s.start, s.end, s.text.strip(), s.avg_logprob) for s in segments if s.text.strip()
+            Cue(
+                s.start,
+                s.end,
+                s.text.strip(),
+                s.avg_logprob,
+                weak_words_of([(w.word, w.probability) for w in (s.words or [])]),
+            )
+            for s in segments
+            if s.text.strip()
         ]
 
     def close(self) -> None:

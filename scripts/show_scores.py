@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 
 from lessonlingo.setup_models import enable_offline_mode
-from lessonlingo.video import DOUBTFUL_SCORE, extract_audio
+from lessonlingo.video import DOUBTFUL_SCORE, WEAK_WORD_PROBABILITY, extract_audio
 
 
 def main() -> None:
@@ -37,15 +37,27 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as work:
         wav = Path(work) / "audio.wav"
         extract_audio(args.video, wav)
-        segments, _ = model.transcribe(str(wav), language="en", vad_filter=True)
-        print(f"Current Check threshold: avg_logprob < {DOUBTFUL_SCORE}\n")
+        segments, _ = model.transcribe(
+            str(wav), language="en", vad_filter=True, word_timestamps=True
+        )
+        print(
+            f"Current Check rule: avg_logprob < {DOUBTFUL_SCORE} or any word probability "
+            f"< {WEAK_WORD_PROBABILITY}\n"
+        )
         for segment in segments:
-            flag = "CHECK" if segment.avg_logprob < DOUBTFUL_SCORE else "     "
+            words = segment.words or []
+            weak = [w.word.strip() for w in words if w.probability < WEAK_WORD_PROBABILITY]
+            lowest = min((w.probability for w in words), default=1.0)
+            flag = "CHECK" if weak or segment.avg_logprob < DOUBTFUL_SCORE else "     "
             print(
                 f"{flag} logprob={segment.avg_logprob:6.2f} "
                 f"no_speech={segment.no_speech_prob:4.2f} "
-                f"compress={segment.compression_ratio:4.2f} | {segment.text.strip()}"
+                f"compress={segment.compression_ratio:4.2f} lowest_word={lowest:4.2f} "
+                f"| {segment.text.strip()}"
             )
+            for w in words:
+                if w.probability < 0.8:
+                    print(f"        word {w.word.strip()!r}: {w.probability:.2f}")
 
 
 if __name__ == "__main__":
