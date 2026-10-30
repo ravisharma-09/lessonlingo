@@ -26,6 +26,15 @@ SUBTITLE_SUFFIXES = {".srt", ".vtt"}
 VIDEO_SUFFIXES = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v", ".mp3", ".wav", ".m4a"}
 
 
+DOUBTFUL_SCORE = -1.0
+
+
+def is_doubtful(cue: Cue) -> bool:
+    """True when speech recognition was unsure about this line (low average log-probability)."""
+
+    return cue.score is not None and cue.score < DOUBTFUL_SCORE
+
+
 def whisper_repository(size: str) -> str:
     """Hugging Face repository that holds the faster-whisper weights for a model size."""
 
@@ -45,13 +54,14 @@ class Transcriber(Protocol):
 class FakeTranscriber:
     """Deterministic transcriber for tests and Mac development."""
 
-    def __init__(self, cues: list[Cue] | None = None) -> None:
-        """Use the given cues, or three short example lecture lines."""
+    def __init__(self, cues: list[Cue] | None = None, hotwords: list[str] | None = None) -> None:
+        """Use the given cues, or three short example lecture lines (one marked doubtful)."""
 
+        self.hotwords = hotwords
         self.cues = cues or [
-            Cue(0.0, 2.5, "Welcome to today's lesson."),
-            Cue(2.5, 6.0, "Water moves between the land, oceans, and atmosphere."),
-            Cue(6.0, 9.0, "This is called the water cycle."),
+            Cue(0.0, 2.5, "Welcome to today's lesson.", -0.2),
+            Cue(2.5, 6.0, "Water moves between the land, oceans, and atmosphere.", -1.6),
+            Cue(6.0, 9.0, "This is called the water cycle.", -0.3),
         ]
 
     def transcribe(self, audio_path: Path) -> list[Cue]:
@@ -66,11 +76,17 @@ class FakeTranscriber:
 class FasterWhisperTranscriber:
     """English speech recognition with faster-whisper, loaded on first use."""
 
-    def __init__(self, size: str = DEFAULT_WHISPER_SIZE, device: str | None = None) -> None:
-        """Configure a Whisper model; `device` is cuda or cpu (default: cuda if available)."""
+    def __init__(
+        self,
+        size: str = DEFAULT_WHISPER_SIZE,
+        device: str | None = None,
+        hotwords: list[str] | None = None,
+    ) -> None:
+        """Configure a Whisper model; `device` is cuda or cpu, `hotwords` are course terms."""
 
         self.size = size
         self.requested_device = device
+        self.hotwords = hotwords or []
         self.device: str | None = None
         self._model = None
 
@@ -102,8 +118,15 @@ class FasterWhisperTranscriber:
         """Transcribe English audio into timed cues."""
 
         self._load()
-        segments, _info = self._model.transcribe(str(audio_path), language="en", vad_filter=True)
-        return [Cue(s.start, s.end, s.text.strip()) for s in segments if s.text.strip()]
+        segments, _info = self._model.transcribe(
+            str(audio_path),
+            language="en",
+            vad_filter=True,
+            hotwords=", ".join(self.hotwords) or None,
+        )
+        return [
+            Cue(s.start, s.end, s.text.strip(), s.avg_logprob) for s in segments if s.text.strip()
+        ]
 
     def close(self) -> None:
         """Free the speech model and its GPU memory before translation starts."""
@@ -185,6 +208,73 @@ def translate_cues(
     return results
 
 
+def transcribe_lecture(
+    path: Path,
+    transcriber: Transcriber | None = None,
+    status: StatusCallback | None = None,
+) -> list[Cue]:
+    """Get English cues from a video/audio file (speech recognition) or a .srt/.vtt file."""
+
+    source = Path(path)
+    if not source.is_file():
+        raise FileNotFoundError(f"Lecture file not found: {source}")
+    suffix = source.suffix.lower()
+    if suffix not in SUBTITLE_SUFFIXES | VIDEO_SUFFIXES:
+        raise ValueError("Use a video or audio file (.mp4, .mkv, .mp3 ...) or a .srt/.vtt file.")
+    if suffix in SUBTITLE_SUFFIXES:
+        return load_subtitles(source)
+
+    speech = transcriber or FasterWhisperTranscriber()
+    try:
+        with tempfile.TemporaryDirectory(prefix="lessonlingo_") as work:
+            wav = Path(work) / "audio.wav"
+            if status:
+                status("Extracting audio")
+            extract_audio(source, wav)
+            if status:
+                status("Listening to the lecture")
+            cues = speech.transcribe(wav)
+    finally:
+        speech.close()
+    if not cues:
+        raise RuntimeError("No speech was found in that file.")
+    return cues
+
+
+def translate_lecture(
+    cues: list[Cue],
+    stem: str,
+    targets: list[str],
+    mode: Mode,
+    out_dir: Path,
+    translator: Translator | None = None,
+    status: StatusCallback | None = None,
+) -> list[Path]:
+    """Translate English cues and write `<stem>.en.srt` plus `.srt` and `.vtt` per language."""
+
+    selected = validate_targets(targets)
+    backend = translator or IndicTransTranslator(mode)
+    try:
+        translated = translate_cues(cues, selected, backend, status)
+    finally:
+        if translator is None:
+            backend.close()
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    transcript = out_dir / f"{stem}.en.srt"
+    transcript.write_text(to_srt(cues), encoding="utf-8")
+    written: list[Path] = [transcript]
+    for target, target_cues in translated.items():
+        for extension, render in ((".srt", to_srt), (".vtt", to_vtt)):
+            path_out = out_dir / f"{stem}.{target}{extension}"
+            path_out.write_text(render(target_cues), encoding="utf-8")
+            written.append(path_out)
+    if status:
+        status("Done")
+    return written
+
+
 def translate_video(
     path: Path,
     targets: list[str],
@@ -196,54 +286,11 @@ def translate_video(
 ) -> list[Path]:
     """Turn a lecture (video, audio, or existing .srt/.vtt) into one subtitle file per language.
 
-    Writes `<stem>.en.srt`, and `<stem>.<lang>.srt` plus `.vtt` for each target. The speech
-    model is freed before the translation model loads, so they never share the GPU.
+    The speech model is freed before the translation model loads, so they never share the GPU.
     """
 
-    source = Path(path)
-    if not source.is_file():
-        raise FileNotFoundError(f"Lecture file not found: {source}")
-    selected = validate_targets(targets)
-    suffix = source.suffix.lower()
-    if suffix not in SUBTITLE_SUFFIXES | VIDEO_SUFFIXES:
-        raise ValueError("Use a video or audio file (.mp4, .mkv, .mp3 ...) or a .srt/.vtt file.")
-
-    if suffix in SUBTITLE_SUFFIXES:
-        cues = load_subtitles(source)
-    else:
-        speech = transcriber or FasterWhisperTranscriber()
-        try:
-            with tempfile.TemporaryDirectory(prefix="lessonlingo_") as work:
-                wav = Path(work) / "audio.wav"
-                if status:
-                    status("Extracting audio")
-                extract_audio(source, wav)
-                if status:
-                    status("Listening to the lecture")
-                cues = speech.transcribe(wav)
-        finally:
-            speech.close()
-        if not cues:
-            raise RuntimeError("No speech was found in that file.")
-
-    backend = translator or IndicTransTranslator(mode)
-    try:
-        translated = translate_cues(cues, selected, backend, status)
-    finally:
-        if translator is None:
-            backend.close()
-
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    written: list[Path] = []
-    transcript = out_dir / f"{source.stem}.en.srt"
-    transcript.write_text(to_srt(cues), encoding="utf-8")
-    written.append(transcript)
-    for target, target_cues in translated.items():
-        for extension, render in ((".srt", to_srt), (".vtt", to_vtt)):
-            path_out = out_dir / f"{source.stem}.{target}{extension}"
-            path_out.write_text(render(target_cues), encoding="utf-8")
-            written.append(path_out)
-    if status:
-        status("Done")
-    return written
+    validate_targets(targets)
+    cues = transcribe_lecture(path, transcriber, status)
+    return translate_lecture(
+        cues, Path(path).stem, targets, mode, out_dir, translator=translator, status=status
+    )
