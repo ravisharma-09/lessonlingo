@@ -1,0 +1,15 @@
+1
+00:00:00,000 --> 00:00:03,000
+Welcome to today's science lesson.
+
+2
+00:00:03,000 --> 00:00:07,500
+Water moves between the land, oceans, and atmosphere.
+
+3
+00:00:07,500 --> 00:00:11,000
+Heat from the sun turns liquid water into vapour.
+
+4
+00:00:11,000 --> 00:00:15,000
+The vapour cools, forms clouds, and returns as rain.
