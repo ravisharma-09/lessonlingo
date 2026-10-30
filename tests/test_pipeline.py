@@ -51,9 +51,7 @@ def test_translate_text_reports_progress() -> None:
         ["hin_Deva", "tam_Taml"],
         "light",
         translator=FakeTranslator(),
-        progress_cb=lambda completed, total, target: updates.append(
-            (completed, total, target)
-        ),
+        progress_cb=lambda completed, total, target: updates.append((completed, total, target)),
     )
 
     assert updates == [(1, 2, "hin_Deva"), (2, 2, "tam_Taml")]

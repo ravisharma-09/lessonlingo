@@ -39,8 +39,7 @@ class FakeTranslator:
         if tgt_lang not in SUPPORTED_LANGUAGES:
             raise ValueError(f"Unsupported target language: {tgt_lang}")
         return [
-            f"[{tgt_lang}] {sentence}" if sentence.strip() else sentence
-            for sentence in sentences
+            f"[{tgt_lang}] {sentence}" if sentence.strip() else sentence for sentence in sentences
         ]
 
     def close(self) -> None:
@@ -122,9 +121,7 @@ class IndicTransTranslator:
         self._load()
         results = list(sentences)
         pending = [
-            (index, sentence)
-            for index, sentence in enumerate(sentences)
-            if sentence.strip()
+            (index, sentence) for index, sentence in enumerate(sentences) if sentence.strip()
         ]
 
         for offset in range(0, len(pending), self.batch_size):

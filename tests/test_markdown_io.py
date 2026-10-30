@@ -40,7 +40,7 @@ def test_protected_markdown_is_not_sent_for_translation() -> None:
     protected = "".join(segment.text for segment in segments if not segment.translatable)
 
     assert "title: Keep this metadata" in protected
-    assert "`print(\"hello\")`" in protected
+    assert '`print("hello")`' in protected
     assert "[the guide](https://example.com/guide)" in protected
     assert "![Diagram](images/example.png)" in protected
     assert "<strong>" in protected and "</strong>" in protected

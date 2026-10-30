@@ -21,17 +21,14 @@ def _translate_for_target(
     segments = split_markdown(text)
     source_sentences = [segment.text for segment in segments if segment.translatable]
     missing = list(
-        dict.fromkeys(
-            sentence for sentence in source_sentences if (target, sentence) not in cache
-        )
+        dict.fromkeys(sentence for sentence in source_sentences if (target, sentence) not in cache)
     )
     if missing:
         outputs = translator.translate(missing, target)
         if len(outputs) != len(missing):
             raise RuntimeError("The translator returned an unexpected output count.")
         cache.update(
-            ((target, sentence), output)
-            for sentence, output in zip(missing, outputs, strict=True)
+            ((target, sentence), output) for sentence, output in zip(missing, outputs, strict=True)
         )
     translations = [cache[(target, sentence)] for sentence in source_sentences]
     return rebuild(segments, translations)
