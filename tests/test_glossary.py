@@ -61,3 +61,28 @@ def test_translate_segments_aligns_with_translatable_segments() -> None:
     )
 
     assert len(translations) == sum(1 for s in segments if s.translatable)
+
+
+def test_load_glossary_reads_preferred_words_and_blank_means_keep(tmp_path) -> None:
+    import pytest
+
+    from lessonlingo.glossary import load_glossary
+
+    sheet = tmp_path / "course.csv"
+    sheet.write_text("term,hin_Deva,kan_Knda\nforce,बल,\nPython,,\n", encoding="utf-8")
+
+    terms, preferred = load_glossary(sheet)
+
+    assert terms == ["force", "Python"]
+    assert preferred["force"] == {"hin_Deva": "बल"}
+    bad = tmp_path / "bad.csv"
+    bad.write_text("word,xx_Xxxx\nforce,y\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_glossary(bad)
+
+
+def test_preferred_translation_is_used_per_language() -> None:
+    translator = GlossaryTranslator(FakeTranslator(), ["force"], {"force": {"hin_Deva": "बल"}})
+
+    assert translator.translate(["Apply a force."], "hin_Deva") == ["[hin_Deva] Apply a बल."]
+    assert translator.translate(["Apply a force."], "kan_Knda") == ["[kan_Knda] Apply a force."]

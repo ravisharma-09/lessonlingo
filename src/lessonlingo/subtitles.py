@@ -15,11 +15,12 @@ _TIMING_LINE = re.compile(rf"^\s*{_TIME}\s*-->\s*{_TIME}")
 
 @dataclass(frozen=True)
 class Cue:
-    """One subtitle: start and end in seconds, and its text."""
+    """One subtitle: start and end in seconds, its text, and an optional recognition score."""
 
     start: float
     end: float
     text: str
+    score: float | None = None
 
 
 def _seconds(hours: str | None, minutes: str, seconds: str, millis: str) -> float:
