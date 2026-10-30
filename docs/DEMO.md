@@ -13,6 +13,6 @@ Before the demo (online, once): `lessonlingo setup`, then
 6. **Text lessons (20s).** Show the Text lesson tab: headings, lists and links stay intact.
 7. **Close (15s).** Open source (MIT), IndicTrans2 by AI4Bharat, runs on a laptop. Machine translation can be wrong, so teachers review before sharing.
 
-Fallback if live transcription fails: run
+Fallback if live transcription fails: press "Try the sample lecture" in the app (it skips speech recognition), or run
 `lessonlingo video samples/lecture_en.srt --to kan_Knda hin_Deva --offline`
 (skips speech recognition), or play the pre-generated files in `samples/`.

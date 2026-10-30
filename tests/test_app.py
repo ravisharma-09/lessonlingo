@@ -154,3 +154,18 @@ def test_transcript_rows_mark_doubtful_lines_and_edits_keep_timing() -> None:
     assert fixed[1] == Cue(3, 5, "Water cycle", -1.8)
     with pytest.raises(ValueError):
         cues_from_rows(cues, rows[:1])
+
+
+def test_lan_address_is_a_local_url_or_none() -> None:
+    from lessonlingo.app import lan_address
+
+    address = lan_address(7860)
+
+    assert address is None or (address.startswith("http://") and address.endswith(":7860"))
+
+
+def test_sample_lecture_ships_with_the_repo() -> None:
+    from lessonlingo.app import SAMPLE_LECTURE
+    from lessonlingo.subtitles import load_subtitles
+
+    assert len(load_subtitles(SAMPLE_LECTURE)) >= 3

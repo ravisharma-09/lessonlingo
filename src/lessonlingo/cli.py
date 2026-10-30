@@ -103,6 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("light", "quality"),
         help="load this model at start so the first translation is fast",
     )
+    app_parser.add_argument(
+        "--lan",
+        action="store_true",
+        help="let devices on the same Wi-Fi or hotspot open the app (trusted networks only)",
+    )
     app_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
 
     setup_parser = subparsers.add_parser(
@@ -229,7 +234,7 @@ def main(
         if args.command == "app":
             from lessonlingo.app import launch
 
-            launch(port=args.port, warm=args.warm)
+            launch(port=args.port, warm=args.warm, lan=args.lan)
             return 0
         if args.command == "video":
             return _run_video(args, translator)

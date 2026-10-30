@@ -6,6 +6,7 @@ Set up once, then no internet needed: the app only uses models that
 
 from __future__ import annotations
 
+import socket
 import tempfile
 import threading
 from collections.abc import Callable
@@ -100,6 +101,22 @@ def read_source(text: str | None, upload_path: str | None) -> tuple[str, str]:
     if text and text.strip():
         return text, "lesson"
     raise ValueError("Paste a lesson or upload a .md or .txt file first.")
+
+
+SAMPLE_LECTURE = Path(__file__).resolve().parents[2] / "samples" / "lecture_en.srt"
+
+
+def lan_address(port: int) -> str | None:
+    """This computer's address on the local network, for students on the same hotspot."""
+
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("10.255.255.255", 1))  # no packet is sent; this only picks a network
+        return f"http://{probe.getsockname()[0]}:{port}"
+    except OSError:
+        return None
+    finally:
+        probe.close()
 
 
 def friendly_error(error: Exception) -> str:
@@ -449,6 +466,9 @@ def build_app(
                     file_types=[".csv"],
                     type="filepath",
                 )
+            if SAMPLE_LECTURE.is_file():
+                v_sample = gr.Button("Try the sample lecture (no video needed)", size="sm")
+                v_sample.click(lambda: str(SAMPLE_LECTURE), None, v_upload)
             v_listen = gr.Button("1. Listen to the lecture", variant="primary", size="lg")
             v_status = gr.Markdown()
             v_heard = gr.State({})

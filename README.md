@@ -154,7 +154,9 @@ lessonlingo app --offline
 
 Open http://127.0.0.1:7860. Paste a lesson or upload a `.md`/`.txt` file, pick
 languages, choose quick or best quality, and download one file per language.
-`--warm light` (or `quality`) loads that model in the background so the first translation
+`--lan` lets phones and laptops on the same Wi-Fi or hotspot open the app, with no
+internet; use it only on a network you trust. The Lecture video tab has a "Try the sample lecture"
+button that needs no video file. `--warm light` (or `quality`) loads that model in the background so the first translation
 is fast. `--offline` (or `LESSONLINGO_OFFLINE=1`) blocks all Hugging Face network calls,
 so models must already be downloaded by `lessonlingo setup`.
 
