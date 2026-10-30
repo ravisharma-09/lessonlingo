@@ -15,6 +15,19 @@ SUPPORTED_LANGUAGES: dict[str, str] = {
     "ory_Orya": "Odia",
 }
 
+NATIVE_NAMES: dict[str, str] = {
+    "hin_Deva": "हिन्दी",
+    "kan_Knda": "ಕನ್ನಡ",
+    "tam_Taml": "தமிழ்",
+    "tel_Telu": "తెలుగు",
+    "mal_Mlym": "മലയാളം",
+    "ben_Beng": "বাংলা",
+    "mar_Deva": "मराठी",
+    "guj_Gujr": "ગુજરાતી",
+    "pan_Guru": "ਪੰਜਾਬੀ",
+    "ory_Orya": "ଓଡ଼ିଆ",
+}
+
 SOURCE_LANGUAGE = "eng_Latn"
 
 

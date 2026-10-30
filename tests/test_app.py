@@ -201,3 +201,21 @@ def test_launch_accepts_every_option_the_cli_passes(
     assert {"port", "share", "warm", "lan", "workspace_root"} <= set(
         inspect.signature(app.launch).parameters
     )
+
+
+def test_player_html_attaches_every_language_and_defaults_the_chosen_one() -> None:
+    from lessonlingo.app import player_html
+
+    html = player_html(
+        "/tmp/My course/talk.mp4",
+        {"kan_Knda": "/tmp/My course/talk.kan_Knda.vtt", "hin_Deva": "/tmp/x/talk.hin_Deva.vtt"},
+        "kan_Knda",
+    )
+
+    assert html.count("<track") == 2
+    assert 'srclang="kn"' in html and 'label="Hindi"' in html
+    assert (
+        html.count(" default>") == 1
+        and "kan_Knda.vtt" in html.split(" default>")[0].split("<track")[-1]
+    )
+    assert "%20" in html and "/gradio_api/file=" in html  # spaces in paths are escaped

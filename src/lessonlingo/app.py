@@ -14,9 +14,10 @@ from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from lessonlingo.glossary import GlossaryTranslator, load_glossary, parse_terms
-from lessonlingo.languages import SUPPORTED_LANGUAGES, validate_targets
+from lessonlingo.languages import NATIVE_NAMES, SUPPORTED_LANGUAGES, validate_targets
 from lessonlingo.library import build_library_tab
 from lessonlingo.markdown_io import Segment, rebuild
 from lessonlingo.pack import make_class_pack
@@ -63,7 +64,12 @@ FORCE_LIGHT_JS = """() => {
 }"""
 
 GREEN_CSS = """
-.gradio-container { max-width: 960px !important; margin: 0 auto !important; }
+.gradio-container { max-width: 760px !important; margin: 0 auto !important;
+  padding-left: 18px !important; padding-right: 18px !important; }
+.tabitem, .tab-wrapper { padding-left: 0 !important; padding-right: 0 !important; }
+.form { background: transparent !important; border: 0 !important; box-shadow: none !important;
+  gap: 0 !important; }
+fieldset.block { padding: 0 !important; border: 0 !important; background: transparent !important; }
 #hero { display: flex; flex-wrap: wrap; gap: 20px; align-items: center;
   justify-content: space-between; padding: 8px 0 12px; }
 #hero .text { flex: 1 1 380px; min-width: 0; }
@@ -71,13 +77,44 @@ GREEN_CSS = """
   letter-spacing: .12em; color: #b45309; }
 #hero h1 { margin: 6px 0; font-size: 2.3rem; line-height: 1.1;
   color: var(--body-text-color); letter-spacing: -.02em; }
-#hero p { margin: 0; font-size: 1.1rem; color: var(--body-text-color-subdued); }
+#hero p { margin: 0; font-size: 1.1rem; color: #3f5648; }
 #hero .tile { background: #2d4540; border-radius: 20px; padding: 14px 20px; display: flex;
   gap: 14px; align-items: flex-end; }
 #hero .tile svg { image-rendering: pixelated; }
 #strip { height: 14px; margin-bottom: 14px; background: repeating-linear-gradient(90deg,
   #8fb4e3 0 28px, #f5b524 28px 56px, #ea7b78 56px 84px, #e2461f 84px 112px); }
+.step h3 { margin: 30px 0 2px; font-size: 1.25rem; font-weight: 800; }
+.step p { margin: 0 0 6px; color: #3f5648; }
+footer { display: none !important; }
+.html-container { padding: 0 !important; }
+button.upload-container { border: 2px dashed #16803c !important; background: #f1faf4 !important;
+  border-radius: 16px !important; color: #0f5a2b !important; min-height: 150px; }
+button.upload-container:hover { background: #e8f7ed !important; }
+
+/* Choice buttons: big, clear tiles with a visible selected state. */
+[data-testid="checkbox-group"] { display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+[data-testid="checkbox-group"] label, label[data-testid$="-radio-label"] {
+  display: flex !important; align-items: center; gap: 10px; min-height: 56px;
+  padding: 12px 16px !important; font-size: 1.05rem; cursor: pointer;
+  border-radius: 14px !important;
+  border: 2px solid #d3e4d9 !important; background: #ffffff !important; box-shadow: none !important;
+  color: #12261b !important; }
+[data-testid="checkbox-group"] label:hover, label[data-testid$="-radio-label"]:hover {
+  border-color: #16803c !important; }
+[data-testid="checkbox-group"] label.selected, label[data-testid$="-radio-label"].selected {
+  border-color: #16803c !important; background: #e8f7ed !important; color: #0f3d22 !important;
+  font-weight: 700; }
+[data-testid="checkbox-group"] label.selected::after,
+label[data-testid$="-radio-label"].selected::after {
+  content: "\\2713"; margin-left: auto; color: #16803c; font-weight: 800; }
+[data-testid="checkbox-group"] input, label[data-testid$="-radio-label"] input {
+  position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+[data-testid="checkbox-group"] label span,
+label[data-testid$="-radio-label"] span { margin: 0 !important; }
+div:has(> label[data-testid$="-radio-label"]) { display: grid !important; gap: 10px; }
 #go button, button#go { font-size: 1.15rem; padding: 14px; }
+video::cue { font-size: 1.3em; background: rgba(0, 0, 0, 0.78); color: #ffffff; }
 """
 
 
@@ -91,6 +128,21 @@ def make_theme() -> Any:
         neutral_hue="slate",
         radius_size="lg",
         font=[gr.themes.GoogleFont("Figtree"), "system-ui", "sans-serif"],
+    ).set(
+        block_border_width="0px",
+        block_shadow="none",
+        block_background_fill="transparent",
+        panel_background_fill="transparent",
+        block_label_background_fill="transparent",
+        block_label_border_width="0px",
+        block_label_shadow="none",
+        block_label_text_color="*body_text_color_subdued",
+        block_title_text_weight="600",
+        input_background_fill="*neutral_100",
+        input_border_color="transparent",
+        input_shadow="none",
+        checkbox_label_shadow="none",
+        accordion_text_color="*body_text_color",
     )
 
 
@@ -243,6 +295,43 @@ def glossary_from(
     return list(dict.fromkeys(terms)), preferred
 
 
+SUBTITLE_LANGUAGE = {
+    "hin_Deva": "hi",
+    "kan_Knda": "kn",
+    "tam_Taml": "ta",
+    "tel_Telu": "te",
+    "mal_Mlym": "ml",
+    "ben_Beng": "bn",
+    "mar_Deva": "mr",
+    "guj_Gujr": "gu",
+    "pan_Guru": "pa",
+    "ory_Orya": "or",
+}
+
+
+def _file_url(path: str) -> str:
+    return "/gradio_api/file=" + quote(str(Path(path).resolve()), safe="/")
+
+
+def player_html(video: str, subtitles: dict[str, str], selected: str) -> str:
+    """A standard browser video player with every language as a subtitle track.
+
+    The chosen language is switched on by default; viewers can also pick one in the player's
+    own captions menu.
+    """
+
+    tracks = "".join(
+        f'<track kind="subtitles" src="{_file_url(path)}"'
+        f' srclang="{SUBTITLE_LANGUAGE.get(code, code)}" label="{SUPPORTED_LANGUAGES[code]}"'
+        f"{' default' if code == selected else ''}>"
+        for code, path in subtitles.items()
+    )
+    return (
+        f'<video controls preload="metadata" crossorigin="anonymous" src="{_file_url(video)}" '
+        f'style="width:100%;border-radius:14px;background:#000">{tracks}</video>'
+    )
+
+
 def check_note(cue: Cue) -> str:
     """What the Check column shows: the doubtful words, or just "Check" for a doubtful line."""
 
@@ -374,7 +463,9 @@ def build_app(
         path = save_review(review["docs"][code][0], table, review["stem"], code)
         return gr.File(value=path, visible=True)
 
-    language_choices = [(f"{name} ({code})", code) for code, name in SUPPORTED_LANGUAGES.items()]
+    language_choices = [
+        (f"{name} · {NATIVE_NAMES[code]}", code) for code, name in SUPPORTED_LANGUAGES.items()
+    ]
 
     def on_listen(
         upload: str | None, keep: str, sheet: str | None, progress: Any = None
@@ -457,9 +548,9 @@ def build_app(
             gr.Dropdown(
                 choices=[(SUPPORTED_LANGUAGES[c], c) for c in vtt], value=first, visible=True
             ),
-            gr.Video(value=upload, subtitles=vtt[first], visible=True)
+            gr.HTML(value=player_html(upload, vtt, first), visible=True)
             if not str(upload).endswith((".srt", ".vtt"))
-            else gr.Video(visible=False),
+            else gr.HTML(visible=False),
             wavs,
             gr.Audio(value=wavs[first], visible=True) if first in wavs else gr.Audio(visible=False),
         )
@@ -468,9 +559,9 @@ def build_app(
         upload: str | None, vtt: dict[str, str], wavs: dict[str, str], code: str
     ) -> tuple[Any, Any]:
         video = (
-            gr.Video(visible=False)
+            gr.HTML(visible=False)
             if not upload or code not in vtt or str(upload).endswith((".srt", ".vtt"))
-            else gr.Video(value=upload, subtitles=vtt[code], visible=True)
+            else gr.HTML(value=player_html(upload, vtt, code), visible=True)
         )
         audio = (
             gr.Audio(value=wavs[code], visible=True) if code in wavs else gr.Audio(visible=False)
@@ -478,21 +569,16 @@ def build_app(
         return video, audio
 
     with gr.Blocks(title="LessonLingo") as app:
-        gr.HTML(HERO_HTML)
+        gr.HTML(HERO_HTML, padding=False)
         with gr.Tabs() as tabs:
-            with gr.Tab("My courses", id="courses"):
-                library = build_library_tab(
-                    gr,
-                    courses_home,
-                    models,
-                    transcriber_factory,
-                    friendly_error,
-                    language_choices,
-                    MODE_CHOICES,
+            with gr.Tab("Translate a lecture", id="lecture"):
+                gr.Markdown(
+                    "### 1. Add your lecture\nA video, audio or `.srt` file in English.",
+                    elem_classes="step",
                 )
-            with gr.Tab("Lecture video", id="lecture"):
                 v_upload = gr.File(
-                    label="1. Add an English lecture (video, audio, or a .srt file)",
+                    show_label=False,
+                    height=170,
                     file_types=[
                         ".mp4",
                         ".mkv",
@@ -506,14 +592,14 @@ def build_app(
                     ],
                     type="filepath",
                 )
+                gr.Markdown("### 2. Pick the languages", elem_classes="step")
                 v_targets = gr.CheckboxGroup(
-                    label="2. Pick languages",
+                    show_label=False,
                     choices=language_choices,
                     value=["kan_Knda", "hin_Deva"],
                 )
-                v_mode = gr.Radio(
-                    label="3. How should it run?", choices=MODE_CHOICES, value="light"
-                )
+                gr.Markdown("### 3. Choose how it runs", elem_classes="step")
+                v_mode = gr.Radio(show_label=False, choices=MODE_CHOICES, value="light")
                 with gr.Accordion("Optional: keep or fix technical words", open=False):
                     v_keep = gr.Textbox(
                         label="Keep these words in English (separated by commas)",
@@ -548,7 +634,7 @@ def build_app(
                 v_state = gr.State({})
                 v_wavs = gr.State({})
                 v_lang = gr.Dropdown(label="Watch with subtitles in", choices=[], visible=False)
-                v_player = gr.Video(label="Lecture", interactive=False, visible=False)
+                v_player = gr.HTML(visible=False, padding=False)
                 v_audio = gr.Audio(label="Hear the translation", visible=False)
                 v_files = gr.File(
                     label="Download subtitles (.srt, .vtt) and the class pack (.zip)",
@@ -567,25 +653,39 @@ def build_app(
                 )
                 v_lang.change(on_language, [v_upload, v_state, v_wavs, v_lang], [v_player, v_audio])
 
-            with gr.Tab("Text lesson"):
+            with gr.Tab("My courses", id="courses"):
+                library = build_library_tab(
+                    gr,
+                    courses_home,
+                    models,
+                    transcriber_factory,
+                    friendly_error,
+                    language_choices,
+                    MODE_CHOICES,
+                )
+            with gr.Tab("Translate a lesson"):
                 with gr.Group():
+                    gr.Markdown("### 1. Add your lesson", elem_classes="step")
                     text = gr.Textbox(
-                        label="1. Paste your lesson",
+                        show_label=False,
                         value=DEFAULT_TEXT,
                         lines=9,
                         placeholder="Paste English lesson text here",
                     )
                     upload = gr.File(
                         label="or upload a .md or .txt file",
+                        height=130,
                         file_types=[".md", ".markdown", ".txt"],
                         type="filepath",
                     )
+                gr.Markdown("### 2. Pick the languages", elem_classes="step")
                 targets = gr.CheckboxGroup(
-                    label="2. Pick languages",
+                    show_label=False,
                     choices=language_choices,
                     value=["hin_Deva", "kan_Knda"],
                 )
-                mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
+                gr.Markdown("### 3. Choose how it runs", elem_classes="step")
+                mode = gr.Radio(show_label=False, choices=MODE_CHOICES, value="light")
                 with gr.Accordion("Optional: keep or fix technical words", open=False):
                     keep = gr.Textbox(
                         label="Keep these words in English (separated by commas)",
@@ -680,4 +780,5 @@ def launch(
         css=GREEN_CSS,
         js=FORCE_LIGHT_JS,
         allowed_paths=[str(courses_home.root)],
+        footer_links=[],
     )
