@@ -248,11 +248,13 @@ The source language is always English (`eng_Latn`).
 
 | Mode | Model | Device | Default batch | Load time | Seconds/sentence |
 | --- | --- | --- | ---: | ---: | ---: |
-| Quality | IndicTrans2 En-Indic 1B | CUDA GPU | 8 | Not measured | Not measured |
-| Light | IndicTrans2 En-Indic 200M | CUDA or CPU | 16 | Not measured | Not measured |
+| Quality | IndicTrans2 En-Indic 1B | CUDA GPU (RTX 4070 laptop) | 8 | 8.9 s | 0.08 s |
+| Light | IndicTrans2 En-Indic 200M | CUDA GPU (RTX 4070 laptop) | 16 | 5.2 s | 0.08 s |
+| Light | IndicTrans2 En-Indic 200M | CPU only (same laptop) | 16 | 6.2 s | 0.55 s |
 
-Timing fields stay "Not measured" until `scripts/bench.py` is run on the Windows GPU
-laptop; results are written to `docs/benchmarks.md`.
+Measured with `scripts/smoke.py` on the Windows test laptop (4 sentences into Hindi, Kannada and
+Tamil, offline flag on). Load time includes the first sentence. A full `scripts/bench.py` run
+writes `docs/benchmarks.md`.
 
 ## Proving local operation after setup
 
