@@ -158,3 +158,30 @@ def test_keep_flag_protects_terms_in_translation(tmp_path: Path) -> None:
     )
 
     assert "Python" in (tmp_path / "a.hin_Deva.md").read_text(encoding="utf-8")
+
+
+def test_glossary_file_and_zip_flags(tmp_path: Path) -> None:
+    import zipfile
+
+    lesson = tmp_path / "unit.md"
+    lesson.write_text("Apply a force today.", encoding="utf-8")
+    sheet = tmp_path / "course.csv"
+    sheet.write_text("term,hin_Deva\nforce,बल\n", encoding="utf-8")
+
+    cli.main(
+        [
+            "translate",
+            str(lesson),
+            "--to",
+            "hin_Deva",
+            "--glossary",
+            str(sheet),
+            "--zip",
+            "--out",
+            str(tmp_path / "o"),
+        ],
+        FakeTranslator(),
+    )
+
+    assert "बल" in (tmp_path / "o" / "unit.hin_Deva.md").read_text(encoding="utf-8")
+    assert "START_HERE.txt" in zipfile.ZipFile(tmp_path / "o" / "unit.classpack.zip").namelist()

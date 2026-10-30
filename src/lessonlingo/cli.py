@@ -7,8 +7,9 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from lessonlingo.glossary import GlossaryTranslator
+from lessonlingo.glossary import GlossaryTranslator, load_glossary
 from lessonlingo.languages import SUPPORTED_LANGUAGES
+from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_file, translate_folder
 from lessonlingo.setup_models import enable_offline_mode, run_setup, run_verify
 from lessonlingo.translator import IndicTransTranslator, Translator
@@ -20,6 +21,8 @@ OFFLINE_HELP = (
 
 
 KEEP_HELP = "words to keep in English, for example --keep photosynthesis Python"
+GLOSSARY_HELP = "course glossary CSV: term, then one column per language with the exact word to use"
+ZIP_HELP = "also write a .classpack.zip that is easy to share on a pen drive"
 
 
 def _offline_requested(flag: bool) -> bool:
@@ -64,6 +67,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     translate_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
     translate_parser.add_argument("--keep", nargs="+", default=[], metavar="TERM", help=KEEP_HELP)
+    translate_parser.add_argument("--glossary", type=Path, help=GLOSSARY_HELP)
+    translate_parser.add_argument("--zip", action="store_true", help=ZIP_HELP)
     translate_parser.add_argument("--device", help="override automatic cuda/cpu selection")
     translate_parser.add_argument("--batch-size", type=int, help="override the mode batch size")
 
@@ -88,6 +93,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     video_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
     video_parser.add_argument("--keep", nargs="+", default=[], metavar="TERM", help=KEEP_HELP)
+    video_parser.add_argument("--glossary", type=Path, help=GLOSSARY_HELP)
+    video_parser.add_argument("--zip", action="store_true", help=ZIP_HELP)
 
     app_parser = subparsers.add_parser("app", help="open the web interface on this computer")
     app_parser.add_argument("--port", type=int, default=7860, help="port (default: 7860)")
@@ -126,13 +133,35 @@ def _progress(completed: int, total: int, target: str) -> None:
     print(f"Translated {target} ({completed}/{total})")
 
 
+def _glossary(args: argparse.Namespace) -> tuple[list[str], dict[str, dict[str, str]]]:
+    """Terms to protect (from --keep and --glossary) and the preferred words per language."""
+
+    terms = list(args.keep)
+    preferred: dict[str, dict[str, str]] = {}
+    if args.glossary:
+        sheet_terms, preferred = load_glossary(args.glossary)
+        terms += sheet_terms
+    return list(dict.fromkeys(terms)), preferred
+
+
+def _wrap(inner: Translator, args: argparse.Namespace) -> Translator:
+    terms, preferred = _glossary(args)
+    return GlossaryTranslator(inner, terms, preferred) if terms else inner
+
+
+def _maybe_zip(args: argparse.Namespace, paths: list[Path]) -> None:
+    if args.zip:
+        stem = args.file.name if args.file.is_dir() else args.file.stem
+        print(make_class_pack(paths, args.out / f"{stem}.classpack.zip"))
+
+
 def _run_translate(args: argparse.Namespace, translator: Translator | None) -> int:
     inner = translator or IndicTransTranslator(
         args.mode,
         device=args.device,
         batch_size=args.batch_size,
     )
-    backend = GlossaryTranslator(inner, args.keep) if args.keep else inner
+    backend = _wrap(inner, args)
     owns_backend = translator is None
     try:
         run = translate_folder if args.file.is_dir() else translate_file
@@ -150,6 +179,7 @@ def _run_translate(args: argparse.Namespace, translator: Translator | None) -> i
 
     for output_path in paths:
         print(output_path)
+    _maybe_zip(args, paths)
     return 0
 
 
@@ -157,14 +187,16 @@ def _run_video(args: argparse.Namespace, translator: Translator | None) -> int:
     from lessonlingo.video import FasterWhisperTranscriber, translate_video
 
     inner = translator or IndicTransTranslator(args.mode)
-    backend = GlossaryTranslator(inner, args.keep) if args.keep else inner
+    backend = _wrap(inner, args)
     try:
         paths = translate_video(
             args.file,
             args.to,
             args.mode,
             args.out,
-            transcriber=FasterWhisperTranscriber(args.whisper, args.whisper_device),
+            transcriber=FasterWhisperTranscriber(
+                args.whisper, args.whisper_device, hotwords=_glossary(args)[0]
+            ),
             translator=backend,
             status=print,
         )
@@ -179,6 +211,7 @@ def _run_video(args: argparse.Namespace, translator: Translator | None) -> int:
         tracks = {p.name.split(".")[-2]: p for p in paths if p.suffix == ".srt"}
         tracks.pop("en", None)
         print(embed_subtitles(args.file, tracks, args.out / f"{args.file.stem}.subtitled.mp4"))
+    _maybe_zip(args, paths)
     return 0
 
 
