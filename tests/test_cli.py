@@ -5,6 +5,7 @@ import huggingface_hub
 import pytest
 
 from lessonlingo import cli, setup_models
+from lessonlingo.translator import FakeTranslator
 
 
 def test_download_models_fetches_both_safetensors_snapshots() -> None:
@@ -82,3 +83,60 @@ def test_cli_help_uses_approved_offline_wording(capsys: Any) -> None:
 
     assert exit_info.value.code == 0
     assert "Set up once, then no internet needed" in capsys.readouterr().out
+
+
+def test_languages_command_lists_codes_and_names(capsys: Any) -> None:
+    """Users can discover every supported CLI language code."""
+
+    assert cli.main(["languages"]) == 0
+
+    output = capsys.readouterr().out
+    assert "hin_Deva\tHindi" in output
+    assert "ory_Orya\tOdia" in output
+
+
+def test_translate_command_writes_outputs_with_fake_backend(
+    tmp_path: Path,
+    capsys: Any,
+) -> None:
+    """The complete CLI flow works on the Mac without importing model code."""
+
+    lesson = tmp_path / "lesson.md"
+    lesson.write_text("# Hello\n", encoding="utf-8")
+    output_dir = tmp_path / "translated"
+
+    result = cli.main(
+        [
+            "translate",
+            str(lesson),
+            "--to",
+            "hin_Deva",
+            "kan_Knda",
+            "--mode",
+            "light",
+            "--out",
+            str(output_dir),
+        ],
+        translator=FakeTranslator(),
+    )
+
+    assert result == 0
+    assert (output_dir / "lesson.hin_Deva.md").read_text(encoding="utf-8") == (
+        "# [hin_Deva] Hello\n"
+    )
+    output = capsys.readouterr().out
+    assert "Translated hin_Deva (1/2)" in output
+    assert "lesson.kan_Knda.md" in output
+
+
+def test_translate_command_reports_missing_file(capsys: Any) -> None:
+    """CLI input failures are concise and do not trigger model loading."""
+
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main(
+            ["translate", "missing.md", "--to", "hin_Deva"],
+            translator=FakeTranslator(),
+        )
+
+    assert exit_info.value.code == 2
+    assert "Lesson file not found" in capsys.readouterr().err
