@@ -9,7 +9,7 @@ from pathlib import Path
 
 from lessonlingo.glossary import GlossaryTranslator
 from lessonlingo.languages import SUPPORTED_LANGUAGES
-from lessonlingo.pipeline import translate_file
+from lessonlingo.pipeline import translate_file, translate_folder
 from lessonlingo.setup_models import enable_offline_mode, run_setup, run_verify
 from lessonlingo.translator import IndicTransTranslator, Translator
 
@@ -39,7 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
         "translate",
         help="translate a Markdown or text lesson after one-time setup",
     )
-    translate_parser.add_argument("file", type=Path, help="English .md or .txt lesson")
+    translate_parser.add_argument(
+        "file", type=Path, help="English .md or .txt lesson, or a folder of lessons"
+    )
     translate_parser.add_argument(
         "--to",
         nargs="+",
@@ -123,7 +125,8 @@ def _run_translate(args: argparse.Namespace, translator: Translator | None) -> i
     backend = GlossaryTranslator(inner, args.keep) if args.keep else inner
     owns_backend = translator is None
     try:
-        paths = translate_file(
+        run = translate_folder if args.file.is_dir() else translate_file
+        paths = run(
             args.file,
             args.to,
             args.mode,

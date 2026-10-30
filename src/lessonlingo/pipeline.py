@@ -105,3 +105,37 @@ def translate_file(
         output_path.write_text(document, encoding="utf-8")
         output_paths.append(output_path)
     return output_paths
+
+
+LESSON_SUFFIXES = {".md", ".markdown", ".txt"}
+
+
+def translate_folder(
+    folder: Path,
+    targets: list[str],
+    mode: Mode,
+    out_dir: Path,
+    translator: Translator | None = None,
+    progress_cb: ProgressCallback | None = None,
+) -> list[Path]:
+    """Translate every lesson in a folder, keeping its sub-folder layout under `out_dir`."""
+
+    root = Path(folder)
+    if not root.is_dir():
+        raise FileNotFoundError(f"Lesson folder not found: {root}")
+    lessons = sorted(p for p in root.rglob("*") if p.suffix.lower() in LESSON_SUFFIXES)
+    if not lessons:
+        raise ValueError("No .md or .txt lessons found in that folder.")
+
+    backend = translator or IndicTransTranslator(mode)
+    try:
+        written: list[Path] = []
+        for lesson in lessons:
+            target_dir = Path(out_dir) / lesson.parent.relative_to(root)
+            written += translate_file(
+                lesson, targets, mode, target_dir, translator=backend, progress_cb=progress_cb
+            )
+    finally:
+        if translator is None:
+            backend.close()
+    return written

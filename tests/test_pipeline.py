@@ -102,3 +102,22 @@ def test_translate_file_rejects_missing_or_unsupported_input(tmp_path: Path) -> 
             tmp_path,
             translator=FakeTranslator(),
         )
+
+
+def test_translate_folder_keeps_layout_and_skips_other_files(tmp_path) -> None:
+    from pathlib import Path
+
+    from lessonlingo.pipeline import translate_folder
+
+    course = tmp_path / "course"
+    (course / "unit1").mkdir(parents=True)
+    (course / "intro.md").write_text("Hello class.", encoding="utf-8")
+    (course / "unit1" / "water.txt").write_text("Water flows.", encoding="utf-8")
+    (course / "logo.png").write_bytes(b"x")
+
+    paths = translate_folder(course, ["hin_Deva"], "light", tmp_path / "out", FakeTranslator())
+
+    assert sorted(p.relative_to(tmp_path / "out") for p in paths) == [
+        Path("intro.hin_Deva.md"),
+        Path("unit1/water.hin_Deva.md"),
+    ]
