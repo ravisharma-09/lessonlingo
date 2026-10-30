@@ -23,6 +23,7 @@ from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_segments
 from lessonlingo.subtitles import Cue, format_timestamp
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
+from lessonlingo.tts import MMSSynthesizer, Synthesizer, dub_subtitles
 from lessonlingo.ui_assets import HERO_HTML
 from lessonlingo.video import (
     FasterWhisperTranscriber,
@@ -298,6 +299,7 @@ def build_app(
     holder: ModelHolder | None = None,
     transcriber_factory: Callable[..., Transcriber] = FasterWhisperTranscriber,
     workspace: Workspace | None = None,
+    synthesizer_factory: Callable[[], Synthesizer] = MMSSynthesizer,
 ) -> Any:
     """Build the Gradio Blocks app. Pass a holder with FakeTranslator for tests."""
 
@@ -402,6 +404,7 @@ def build_app(
         mode: Mode,
         keep: str,
         sheet: str | None,
+        dub: bool,
         progress: Any = None,
     ) -> tuple[Any, ...]:
         if not targets:
@@ -423,14 +426,28 @@ def build_app(
                 with_glossary(models.get(mode), keep, sheet),
                 status=lambda message: progress(None, desc=message),
             )
-            pack = make_class_pack(written, folder / f"{stem}.classpack.zip")
+            spoken: list[Path] = []
+            if dub:
+                models.close()  # free the GPU before the voice model loads
+                progress(None, desc="Speaking the translation")
+                spoken = dub_subtitles(
+                    [p for p in written if p.suffix == ".srt"],
+                    Path(upload),
+                    folder,
+                    synthesizer_factory(),
+                )
+            pack = make_class_pack(
+                [*written, *[p for p in spoken if p.suffix == ".wav"]],
+                folder / f"{stem}.classpack.zip",
+            )
         except (ValueError, FileNotFoundError, RuntimeError) as error:
             raise gr.Error(friendly_error(error)) from error
         vtt = {p.name.split(".")[-2]: str(p) for p in written if p.suffix == ".vtt"}
+        wavs = {p.name.split(".")[-2]: str(p) for p in spoken if p.suffix == ".wav"}
         first = next(iter(vtt))
         return (
-            f"Done. {len(written)} subtitle files and a class pack are ready.",
-            gr.File(value=[*map(str, written), str(pack)], visible=True),
+            f"Done. {len(written) + len(spoken)} files and a class pack are ready.",
+            gr.File(value=[*map(str, written), *map(str, spoken), str(pack)], visible=True),
             vtt,
             gr.Dropdown(
                 choices=[(SUPPORTED_LANGUAGES[c], c) for c in vtt], value=first, visible=True
@@ -438,12 +455,22 @@ def build_app(
             gr.Video(value=upload, subtitles=vtt[first], visible=True)
             if not str(upload).endswith((".srt", ".vtt"))
             else gr.Video(visible=False),
+            wavs,
+            gr.Audio(value=wavs[first], visible=True) if first in wavs else gr.Audio(visible=False),
         )
 
-    def on_language(upload: str | None, vtt: dict[str, str], code: str) -> Any:
-        if not upload or code not in vtt or str(upload).endswith((".srt", ".vtt")):
-            return gr.Video(visible=False)
-        return gr.Video(value=upload, subtitles=vtt[code], visible=True)
+    def on_language(
+        upload: str | None, vtt: dict[str, str], wavs: dict[str, str], code: str
+    ) -> tuple[Any, Any]:
+        video = (
+            gr.Video(visible=False)
+            if not upload or code not in vtt or str(upload).endswith((".srt", ".vtt"))
+            else gr.Video(value=upload, subtitles=vtt[code], visible=True)
+        )
+        audio = (
+            gr.Audio(value=wavs[code], visible=True) if code in wavs else gr.Audio(visible=False)
+        )
+        return video, audio
 
     with gr.Blocks(title="LessonLingo") as app:
         gr.HTML(HERO_HTML)
@@ -495,6 +522,11 @@ def build_app(
                 if SAMPLE_LECTURE.is_file():
                     v_sample = gr.Button("Try the sample lecture (no video needed)", size="sm")
                     v_sample.click(lambda: str(SAMPLE_LECTURE), None, v_upload)
+                v_dub = gr.Checkbox(
+                    label="Also speak the translation (optional, non-commercial voices; run "
+                    "`lessonlingo setup --voices` first)",
+                    value=False,
+                )
                 v_listen = gr.Button("1. Listen to the lecture", variant="primary", size="lg")
                 v_status = gr.Markdown()
                 v_heard = gr.State({})
@@ -509,8 +541,10 @@ def build_app(
                 )
                 v_go = gr.Button("2. Translate", variant="primary", size="lg", visible=False)
                 v_state = gr.State({})
+                v_wavs = gr.State({})
                 v_lang = gr.Dropdown(label="Watch with subtitles in", choices=[], visible=False)
                 v_player = gr.Video(label="Lecture", interactive=False, visible=False)
+                v_audio = gr.Audio(label="Hear the translation", visible=False)
                 v_files = gr.File(
                     label="Download subtitles (.srt, .vtt) and the class pack (.zip)",
                     file_count="multiple",
@@ -523,10 +557,10 @@ def build_app(
                 )
                 v_go.click(
                     on_translate_video,
-                    [v_upload, v_heard, v_table, v_targets, v_mode, v_keep, v_sheet],
-                    [v_status, v_files, v_state, v_lang, v_player],
+                    [v_upload, v_heard, v_table, v_targets, v_mode, v_keep, v_sheet, v_dub],
+                    [v_status, v_files, v_state, v_lang, v_player, v_wavs, v_audio],
                 )
-                v_lang.change(on_language, [v_upload, v_state, v_lang], v_player)
+                v_lang.change(on_language, [v_upload, v_state, v_wavs, v_lang], [v_player, v_audio])
 
             with gr.Tab("Text lesson"):
                 with gr.Group():

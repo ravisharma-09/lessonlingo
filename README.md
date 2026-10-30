@@ -222,7 +222,8 @@ longer than their subtitle slot are sped up by at most 1.3 times; after that the
 slightly behind the picture and the command prints the delay. Whether a voice exists for each of
 the ten languages has not been checked; a missing one reports a clear error. This feature is
 tested with a fake voice on the development machine; the real voices must be tried on the GPU
-laptop. It is not in the web app yet.
+laptop. In the web app, tick "Also speak the translation" on the Lecture video tab; you then get
+the voice files, the dubbed video and a "Hear the translation" player.
 
 ### Course glossary, transcript check and class pack
 
