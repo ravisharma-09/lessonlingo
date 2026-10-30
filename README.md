@@ -328,6 +328,16 @@ The full script is in [docs/DEMO.md](docs/DEMO.md). Short version:
 - Subtitles are added as selectable tracks (`--embed`), not burned into the picture.
 - Real model loading and generated-language quality are not verified on the Mac.
 
+## Sample files
+
+- `samples/lecture_demo.mp4` is a 61-second test lecture about the water cycle. Its narration was
+  made with the macOS built-in voice "Aman" (synthetic speech) from `samples/lecture_demo_script.txt`;
+  the picture is a plain green screen. It exists so anyone can try the video flow without
+  recording anything. Real teachers' voices and accents are harder, so record your own for a real
+  evaluation.
+- `samples/lecture_en.srt`, `samples/lesson_en.md` and `samples/short_lesson_en.md` are short
+  texts written for this project.
+
 ## AI tools used
 
 This project was written with AI coding assistants: OpenAI Codex (initial repository,
