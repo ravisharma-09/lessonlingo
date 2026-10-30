@@ -23,6 +23,7 @@ while ($true) {
         python -m pip install -q -r requirements.txt
         python -m pytest -q
         python scripts/smoke.py
+        if (Test-Path lecture.mp4) { python scripts/smoke_video.py lecture.mp4 }
     } *>&1 | Tee-Object -FilePath $ReportPath
 
     $LastCommit = $RemoteCommit
