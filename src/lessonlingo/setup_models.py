@@ -72,6 +72,22 @@ def verify_models(
         print(f"Found {model.mode} model in the local cache.")
 
 
+def download_whisper(
+    snapshot_download: SnapshotDownload,
+    cache_dir: Path | None = None,
+    local_only: bool = False,
+) -> None:
+    """Download (or verify in the local cache) the public speech model for video."""
+
+    from lessonlingo.video import DEFAULT_WHISPER_SIZE, whisper_repository
+
+    snapshot_download(
+        repo_id=whisper_repository(DEFAULT_WHISPER_SIZE),
+        cache_dir=str(cache_dir) if cache_dir else None,
+        local_files_only=local_only,
+    )
+
+
 def run_setup(cache_dir: Path | None = None) -> int:
     """Authenticate when needed and download all required models once."""
 
@@ -95,6 +111,8 @@ def run_setup(cache_dir: Path | None = None) -> int:
             f"again:\n{repositories}"
         ) from error
 
+    print("Downloading speech model for lecture videos (about 0.5 GB)")
+    download_whisper(snapshot_download, cache_dir)
     print("Setup complete. Models and dependencies are now available on this device.")
     print("After setup, translating lessons needs no internet connection.")
     return 0
@@ -109,6 +127,8 @@ def run_verify(cache_dir: Path | None = None) -> int:
 
     try:
         verify_models(snapshot_download, cache_dir)
+        download_whisper(snapshot_download, cache_dir, local_only=True)
+        print("Found speech model in the local cache.")
     except LocalEntryNotFoundError as error:
         raise SystemExit(
             "Offline verification failed because a model snapshot is missing or "

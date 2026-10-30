@@ -137,3 +137,12 @@ def test_video_command_translates_an_srt_file(tmp_path: Path) -> None:
     assert "[hin_Deva] Hello class." in (tmp_path / "o" / "talk.hin_Deva.srt").read_text(
         encoding="utf-8"
     )
+
+
+def test_download_whisper_uses_public_repo_and_local_flag() -> None:
+    calls: list[dict[str, object]] = []
+
+    setup_models.download_whisper(lambda **kw: calls.append(kw) or "x", None, local_only=True)
+
+    assert calls[0]["repo_id"] == "Systran/faster-whisper-small"
+    assert calls[0]["local_files_only"] is True
