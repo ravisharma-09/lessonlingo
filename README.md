@@ -129,6 +129,9 @@ lessonlingo translate .\samples\lesson_en.md `
   --out .\outputs
 ```
 
+Pass a folder instead of a file to translate a whole course; the sub-folder layout is
+kept under `--out`.
+
 Output names follow `<source>.<language-code>.md`, for example
 `lesson_en.hin_Deva.md`.
 

@@ -48,7 +48,7 @@ flowchart LR
 | `translator.py` | `Translator.translate(sentences, tgt_lang)`, `close()`; `FakeTranslator`, `IndicTransTranslator(mode, device, batch_size)` | Lazy model load. Quality = 1B on GPU, light = 200M. |
 | `glossary.py` | `GlossaryTranslator(inner, terms)`, `parse_terms(text)` | Wraps any translator. Re-translates a sentence if a placeholder is lost. |
 | `markdown_io.py` | `split_markdown(text) -> list[Segment]`, `rebuild(segments, translations)` | Round trip is exact for protected parts. |
-| `pipeline.py` | `translate_segments`, `translate_text`, `translate_file` | Caches identical sentences within a run. |
+| `pipeline.py` | `translate_segments`, `translate_text`, `translate_file`, `translate_folder` | Caches identical sentences within a run. |
 | `subtitles.py` | `Cue`, `parse_subtitles`, `load_subtitles`, `to_srt`, `to_vtt`, `with_text`, `wrap_text` | SRT and WebVTT. Wraps at 42 characters. |
 | `video.py` | `Transcriber`, `FakeTranscriber`, `FasterWhisperTranscriber`, `extract_audio`, `translate_video` | Status callback reports each stage. |
 | `setup_models.py` | `run_setup`, `run_verify`, `enable_offline_mode` | Downloads IndicTrans2 1B and 200M plus the Whisper model. |
@@ -84,4 +84,4 @@ design canvas has the matching screens: Add a lecture, Check the subtitles, Watc
 
 ## Not built yet
 
-Burning subtitles into the video, translating whole folders, and a GitHub Action.
+Burning subtitles into the video and a GitHub Action.
