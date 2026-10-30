@@ -93,20 +93,30 @@ def download_voices(
     languages: list[str],
     cache_dir: Path | None = None,
     local_only: bool = False,
+    engine: str = "mms",
 ) -> None:
-    """Download (or check in the local cache) the optional spoken voices."""
+    """Download (or check in the local cache) the optional spoken voices for an engine."""
 
-    from lessonlingo.tts import voice_repository
+    from lessonlingo.tts import PARLER_REPOSITORY, voice_repository
 
+    cache = str(cache_dir) if cache_dir else None
+    if engine == "parler":
+        snapshot_download(repo_id=PARLER_REPOSITORY, cache_dir=cache, local_files_only=local_only)
+        return
     for language in languages:
         snapshot_download(
             repo_id=voice_repository(language),
-            cache_dir=str(cache_dir) if cache_dir else None,
+            cache_dir=cache,
             local_files_only=local_only,
+            ignore_patterns=["*.bin"],
         )
 
 
-def run_setup(cache_dir: Path | None = None, voices: list[str] | None = None) -> int:
+def run_setup(
+    cache_dir: Path | None = None,
+    voices: list[str] | None = None,
+    voice_engine: str = "mms",
+) -> int:
     """Authenticate when needed and download all required models once."""
 
     enable_online_setup()
@@ -132,8 +142,9 @@ def run_setup(cache_dir: Path | None = None, voices: list[str] | None = None) ->
     print("Downloading speech model for lecture videos (about 0.5 GB)")
     download_whisper(snapshot_download, cache_dir)
     if voices:
-        print("Downloading optional voices (non-commercial licence): " + ", ".join(voices))
-        download_voices(snapshot_download, voices, cache_dir)
+        label = "Indic Parler-TTS (about 3.8 GB)" if voice_engine == "parler" else "Meta MMS"
+        print(f"Downloading optional voices: {label} for " + ", ".join(voices))
+        download_voices(snapshot_download, voices, cache_dir, engine=voice_engine)
     print("Setup complete. Models and dependencies are now available on this device.")
     print("After setup, translating lessons needs no internet connection.")
     return 0

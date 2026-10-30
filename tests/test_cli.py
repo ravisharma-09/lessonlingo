@@ -243,3 +243,14 @@ def test_setup_voices_use_the_voice_repositories() -> None:
     setup_models.download_voices(lambda **kw: calls.append(kw) or "x", ["kan_Knda", "hin_Deva"])
 
     assert [c["repo_id"] for c in calls] == ["facebook/mms-tts-kan", "facebook/mms-tts-hin"]
+    assert all(c["ignore_patterns"] == ["*.bin"] for c in calls)
+
+
+def test_setup_can_download_the_natural_voice_once() -> None:
+    calls: list[dict[str, object]] = []
+
+    setup_models.download_voices(
+        lambda **kw: calls.append(kw) or "x", ["kan_Knda", "hin_Deva"], engine="parler"
+    )
+
+    assert [c["repo_id"] for c in calls] == ["ai4bharat/indic-parler-tts"]

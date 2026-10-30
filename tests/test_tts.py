@@ -95,3 +95,89 @@ def test_add_dubbed_audio_with_real_ffmpeg(tmp_path: Path) -> None:
 
     probe = subprocess.run(["ffmpeg", "-i", str(out)], capture_output=True, text=True)
     assert probe.stderr.count("Audio:") == 2
+
+
+def test_engine_factory_and_auto_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert isinstance(tts.make_synthesizer("mms"), tts.MMSSynthesizer)
+    assert isinstance(tts.make_synthesizer("parler"), tts.IndicParlerSynthesizer)
+    with pytest.raises(ValueError):
+        tts.make_synthesizer("nope")
+
+    monkeypatch.setattr(tts, "parler_installed", lambda: False)
+    assert isinstance(tts.AutoSynthesizer()._inner, tts.MMSSynthesizer)
+
+    monkeypatch.setattr(tts, "parler_installed", lambda: True)
+    auto = tts.AutoSynthesizer()
+    assert isinstance(auto._inner, tts.IndicParlerSynthesizer)
+
+    class Broken(tts.IndicParlerSynthesizer):
+        def synthesize(self, text: str, language: str):
+            raise RuntimeError("not downloaded")
+
+    class Backup(FakeSynthesizer):
+        engine_name = "backup"
+
+    monkeypatch.setattr(tts, "MMSSynthesizer", Backup)
+    auto._inner = Broken()
+    samples, _ = auto.synthesize("Hello", "kan_Knda")
+
+    assert samples and auto.engine_name == "backup"
+
+
+def test_parler_without_its_package_explains_the_install() -> None:
+    voice = tts.IndicParlerSynthesizer()
+
+    if tts.parler_installed():
+        pytest.skip("parler_tts is installed here")
+    with pytest.raises(RuntimeError, match="requirements-voice.txt"):
+        voice.synthesize("Hello", "hin_Deva")
+    with pytest.raises(ValueError):
+        voice.synthesize("Hello", "tam_Taml")
+
+
+def test_only_tested_languages_are_spoken_and_each_gets_its_own_video(tmp_path: Path) -> None:
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg is not installed")
+    clip = tmp_path / "clip.mp4"
+    made = subprocess.run(
+        [
+            "ffmpeg",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=green:s=160x90:d=3",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=d=3",
+            "-shortest",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "aac",
+            str(clip),
+        ],
+        capture_output=True,
+    )
+    if made.returncode != 0:
+        pytest.skip("this ffmpeg cannot make a test clip")
+    srts = []
+    for code in ("kan_Knda", "hin_Deva", "tam_Taml"):
+        srt = tmp_path / f"clip.{code}.srt"
+        srt.write_text("1\n00:00:00,000 --> 00:00:02,000\nHello there\n", encoding="utf-8")
+        srts.append(srt)
+    notes: list[str] = []
+
+    written = tts.dub_subtitles(srts, clip, tmp_path, FakeSynthesizer(), notes.append)
+
+    names = sorted(p.name for p in written)
+    assert "clip.kan_Knda.dubbed.mp4" in names and "clip.hin_Deva.dubbed.mp4" in names
+    assert "clip.dubbed.mp4" in names and not any("tam_Taml" in n for n in names)
+    assert any("tam_Taml" in n and "No tested voice" in n for n in notes)
+    probe = subprocess.run(
+        ["ffmpeg", "-i", str(tmp_path / "clip.kan_Knda.dubbed.mp4")], capture_output=True, text=True
+    )
+    assert probe.stderr.count("Audio:") == 1

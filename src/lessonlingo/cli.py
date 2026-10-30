@@ -13,7 +13,7 @@ from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_file, translate_folder
 from lessonlingo.setup_models import enable_offline_mode, run_setup, run_verify
 from lessonlingo.translator import IndicTransTranslator, Translator
-from lessonlingo.tts import MMSSynthesizer, Synthesizer, dub_subtitles
+from lessonlingo.tts import VOICE_ENGINES, Synthesizer, dub_subtitles, make_synthesizer
 from lessonlingo.video import FasterWhisperTranscriber, Transcriber
 from lessonlingo.workspace import DEFAULT_TARGETS, Workspace
 
@@ -97,7 +97,13 @@ def build_parser() -> argparse.ArgumentParser:
     video_parser.add_argument(
         "--dub",
         action="store_true",
-        help="also speak the translation (MMS voices, non-commercial licence; see README)",
+        help="also speak the translation in Hindi and Kannada (see the README voice setup)",
+    )
+    video_parser.add_argument(
+        "--voice-engine",
+        choices=VOICE_ENGINES,
+        default="auto",
+        help="auto uses the natural Indic Parler-TTS voice when installed, else Meta MMS",
     )
     video_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
     video_parser.add_argument("--keep", nargs="+", default=[], metavar="TERM", help=KEEP_HELP)
@@ -133,6 +139,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=SUPPORTED_LANGUAGES,
         metavar="LANG",
         help="also download the optional spoken voices for these languages",
+    )
+    setup_parser.add_argument(
+        "--voice-engine",
+        choices=("mms", "parler"),
+        default="mms",
+        help="which voices --voices downloads: mms (small, robotic) or parler (natural, 3.8 GB)",
     )
     setup_parser.add_argument(
         "--cache-dir",
@@ -270,7 +282,7 @@ def _dub(
 def _run_video(
     args: argparse.Namespace,
     translator: Translator | None,
-    synthesizer_factory: Callable[[], Synthesizer] = MMSSynthesizer,
+    synthesizer_factory: Callable[[], Synthesizer],
 ) -> int:
     from lessonlingo.video import FasterWhisperTranscriber, translate_video
 
@@ -353,7 +365,7 @@ def main(
     argv: Sequence[str] | None = None,
     translator: Translator | None = None,
     transcriber_factory: Callable[..., Transcriber] = FasterWhisperTranscriber,
-    synthesizer_factory: Callable[[], Synthesizer] = MMSSynthesizer,
+    synthesizer_factory: Callable[[], Synthesizer] | None = None,
 ) -> int:
     """Run LessonLingo, optionally injecting fake backends for tests."""
 
@@ -373,11 +385,15 @@ def main(
             launch(port=args.port, warm=args.warm, lan=args.lan, workspace_root=args.workspace)
             return 0
         if args.command == "video":
-            return _run_video(args, translator, synthesizer_factory)
+            return _run_video(
+                args,
+                translator,
+                synthesizer_factory or (lambda: make_synthesizer(args.voice_engine)),
+            )
         if args.command == "translate":
             return _run_translate(args, translator)
         if args.command == "setup":
-            return run_setup(args.cache_dir, args.voices)
+            return run_setup(args.cache_dir, args.voices, args.voice_engine)
         if args.command == "verify":
             return run_verify(args.cache_dir)
         for code, name in SUPPORTED_LANGUAGES.items():
