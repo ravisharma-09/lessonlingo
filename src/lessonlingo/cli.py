@@ -104,6 +104,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="load this model at start so the first translation is fast",
     )
     app_parser.add_argument(
+        "--workspace",
+        type=Path,
+        help="folder that holds your courses (default: ~/LessonLingo or $LESSONLINGO_HOME)",
+    )
+    app_parser.add_argument(
         "--lan",
         action="store_true",
         help="let devices on the same Wi-Fi or hotspot open the app (trusted networks only)",
@@ -234,7 +239,7 @@ def main(
         if args.command == "app":
             from lessonlingo.app import launch
 
-            launch(port=args.port, warm=args.warm, lan=args.lan)
+            launch(port=args.port, warm=args.warm, lan=args.lan, workspace_root=args.workspace)
             return 0
         if args.command == "video":
             return _run_video(args, translator)

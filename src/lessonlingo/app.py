@@ -6,6 +6,7 @@ Set up once, then no internet needed: the app only uses models that
 
 from __future__ import annotations
 
+import os
 import socket
 import tempfile
 import threading
@@ -16,6 +17,7 @@ from typing import Any
 
 from lessonlingo.glossary import GlossaryTranslator, load_glossary, parse_terms
 from lessonlingo.languages import SUPPORTED_LANGUAGES, validate_targets
+from lessonlingo.library import build_library_tab
 from lessonlingo.markdown_io import Segment, rebuild
 from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_segments
@@ -30,6 +32,7 @@ from lessonlingo.video import (
     translate_lecture,
     translate_video,
 )
+from lessonlingo.workspace import Workspace
 
 DEFAULT_TEXT = (
     "# Water Cycle\n\n"
@@ -285,15 +288,23 @@ class ModelHolder:
         self._mode = None
 
 
+def default_workspace_root() -> Path:
+    """Where courses live: $LESSONLINGO_HOME, else ~/LessonLingo."""
+
+    return Path(os.environ.get("LESSONLINGO_HOME") or Path.home() / "LessonLingo")
+
+
 def build_app(
     holder: ModelHolder | None = None,
     transcriber_factory: Callable[..., Transcriber] = FasterWhisperTranscriber,
+    workspace: Workspace | None = None,
 ) -> Any:
     """Build the Gradio Blocks app. Pass a holder with FakeTranslator for tests."""
 
     import gradio as gr
 
     models = holder or ModelHolder()
+    courses_home = workspace or Workspace(default_workspace_root())
 
     def with_glossary(
         translator: Translator, keep: str | None, sheet: str | None = None
@@ -436,126 +447,156 @@ def build_app(
 
     with gr.Blocks(title="LessonLingo") as app:
         gr.HTML(HERO_HTML)
-        with gr.Tab("Lecture video"):
-            v_upload = gr.File(
-                label="1. Add an English lecture (video, audio, or a .srt file)",
-                file_types=[
-                    ".mp4",
-                    ".mkv",
-                    ".mov",
-                    ".webm",
-                    ".mp3",
-                    ".wav",
-                    ".m4a",
-                    ".srt",
-                    ".vtt",
-                ],
-                type="filepath",
-            )
-            v_targets = gr.CheckboxGroup(
-                label="2. Pick languages", choices=language_choices, value=["kan_Knda", "hin_Deva"]
-            )
-            v_mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
-            with gr.Accordion("Optional: keep or fix technical words", open=False):
-                v_keep = gr.Textbox(
-                    label="Keep these words in English (separated by commas)",
-                    placeholder="photosynthesis, Python",
+        with gr.Tabs() as tabs:
+            with gr.Tab("My courses", id="courses"):
+                library = build_library_tab(
+                    gr,
+                    courses_home,
+                    models,
+                    transcriber_factory,
+                    friendly_error,
+                    language_choices,
+                    MODE_CHOICES,
                 )
-                v_sheet = gr.File(
-                    label="Course glossary (.csv: term, then the exact word per language)",
-                    file_types=[".csv"],
+            with gr.Tab("Lecture video", id="lecture"):
+                v_upload = gr.File(
+                    label="1. Add an English lecture (video, audio, or a .srt file)",
+                    file_types=[
+                        ".mp4",
+                        ".mkv",
+                        ".mov",
+                        ".webm",
+                        ".mp3",
+                        ".wav",
+                        ".m4a",
+                        ".srt",
+                        ".vtt",
+                    ],
                     type="filepath",
                 )
-            if SAMPLE_LECTURE.is_file():
-                v_sample = gr.Button("Try the sample lecture (no video needed)", size="sm")
-                v_sample.click(lambda: str(SAMPLE_LECTURE), None, v_upload)
-            v_listen = gr.Button("1. Listen to the lecture", variant="primary", size="lg")
-            v_status = gr.Markdown()
-            v_heard = gr.State({})
-            v_table = gr.Dataframe(
-                headers=["Time", "Heard (click a cell to fix mistakes)", "Check"],
-                datatype=["str", "str", "str"],
-                static_columns=[0, 2],
-                interactive=True,
-                wrap=True,
-                visible=False,
-                type="array",
-            )
-            v_go = gr.Button("2. Translate", variant="primary", size="lg", visible=False)
-            v_state = gr.State({})
-            v_lang = gr.Dropdown(label="Watch with subtitles in", choices=[], visible=False)
-            v_player = gr.Video(label="Lecture", interactive=False, visible=False)
-            v_files = gr.File(
-                label="Download subtitles (.srt, .vtt) and the class pack (.zip)",
-                file_count="multiple",
-                visible=False,
-            )
-            v_listen.click(
-                on_listen,
-                [v_upload, v_keep, v_sheet],
-                [v_status, v_heard, v_table, v_go],
-            )
-            v_go.click(
-                on_translate_video,
-                [v_upload, v_heard, v_table, v_targets, v_mode, v_keep, v_sheet],
-                [v_status, v_files, v_state, v_lang, v_player],
-            )
-            v_lang.change(on_language, [v_upload, v_state, v_lang], v_player)
+                v_targets = gr.CheckboxGroup(
+                    label="2. Pick languages",
+                    choices=language_choices,
+                    value=["kan_Knda", "hin_Deva"],
+                )
+                v_mode = gr.Radio(
+                    label="3. How should it run?", choices=MODE_CHOICES, value="light"
+                )
+                with gr.Accordion("Optional: keep or fix technical words", open=False):
+                    v_keep = gr.Textbox(
+                        label="Keep these words in English (separated by commas)",
+                        placeholder="photosynthesis, Python",
+                    )
+                    v_sheet = gr.File(
+                        label="Course glossary (.csv: term, then the exact word per language)",
+                        file_types=[".csv"],
+                        type="filepath",
+                    )
+                if SAMPLE_LECTURE.is_file():
+                    v_sample = gr.Button("Try the sample lecture (no video needed)", size="sm")
+                    v_sample.click(lambda: str(SAMPLE_LECTURE), None, v_upload)
+                v_listen = gr.Button("1. Listen to the lecture", variant="primary", size="lg")
+                v_status = gr.Markdown()
+                v_heard = gr.State({})
+                v_table = gr.Dataframe(
+                    headers=["Time", "Heard (click a cell to fix mistakes)", "Check"],
+                    datatype=["str", "str", "str"],
+                    static_columns=[0, 2],
+                    interactive=True,
+                    wrap=True,
+                    visible=False,
+                    type="array",
+                )
+                v_go = gr.Button("2. Translate", variant="primary", size="lg", visible=False)
+                v_state = gr.State({})
+                v_lang = gr.Dropdown(label="Watch with subtitles in", choices=[], visible=False)
+                v_player = gr.Video(label="Lecture", interactive=False, visible=False)
+                v_files = gr.File(
+                    label="Download subtitles (.srt, .vtt) and the class pack (.zip)",
+                    file_count="multiple",
+                    visible=False,
+                )
+                v_listen.click(
+                    on_listen,
+                    [v_upload, v_keep, v_sheet],
+                    [v_status, v_heard, v_table, v_go],
+                )
+                v_go.click(
+                    on_translate_video,
+                    [v_upload, v_heard, v_table, v_targets, v_mode, v_keep, v_sheet],
+                    [v_status, v_files, v_state, v_lang, v_player],
+                )
+                v_lang.change(on_language, [v_upload, v_state, v_lang], v_player)
 
-        with gr.Tab("Text lesson"):
-            with gr.Group():
-                text = gr.Textbox(
-                    label="1. Paste your lesson",
-                    value=DEFAULT_TEXT,
-                    lines=9,
-                    placeholder="Paste English lesson text here",
+            with gr.Tab("Text lesson"):
+                with gr.Group():
+                    text = gr.Textbox(
+                        label="1. Paste your lesson",
+                        value=DEFAULT_TEXT,
+                        lines=9,
+                        placeholder="Paste English lesson text here",
+                    )
+                    upload = gr.File(
+                        label="or upload a .md or .txt file",
+                        file_types=[".md", ".markdown", ".txt"],
+                        type="filepath",
+                    )
+                targets = gr.CheckboxGroup(
+                    label="2. Pick languages",
+                    choices=language_choices,
+                    value=["hin_Deva", "kan_Knda"],
                 )
-                upload = gr.File(
-                    label="or upload a .md or .txt file",
-                    file_types=[".md", ".markdown", ".txt"],
-                    type="filepath",
+                mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
+                with gr.Accordion("Optional: keep or fix technical words", open=False):
+                    keep = gr.Textbox(
+                        label="Keep these words in English (separated by commas)",
+                        placeholder="photosynthesis, Python",
+                    )
+                    sheet = gr.File(
+                        label="Course glossary (.csv: term, then the exact word per language)",
+                        file_types=[".csv"],
+                        type="filepath",
+                    )
+                go = gr.Button("Translate lesson", variant="primary", size="lg", elem_id="go")
+                status = gr.Markdown()
+                files = gr.File(
+                    label="Download one file per language, and the class pack (.zip)",
+                    file_count="multiple",
+                    visible=False,
                 )
-            targets = gr.CheckboxGroup(
-                label="2. Pick languages", choices=language_choices, value=["hin_Deva", "kan_Knda"]
-            )
-            mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
-            with gr.Accordion("Optional: keep or fix technical words", open=False):
-                keep = gr.Textbox(
-                    label="Keep these words in English (separated by commas)",
-                    placeholder="photosynthesis, Python",
+                review_state = gr.State({})
+                review_lang = gr.Dropdown(label="Review language", choices=[], visible=False)
+                review_table = gr.Dataframe(
+                    headers=["English", "Translation (click a cell to edit)"],
+                    datatype=["str", "str"],
+                    static_columns=[0],
+                    interactive=True,
+                    wrap=True,
+                    visible=False,
+                    type="array",
                 )
-                sheet = gr.File(
-                    label="Course glossary (.csv: term, then the exact word per language)",
-                    file_types=[".csv"],
-                    type="filepath",
+                save_btn = gr.Button("Save my edits", visible=False)
+                edited = gr.File(label="Your edited file", visible=False)
+                go.click(
+                    on_translate,
+                    [text, upload, targets, mode, keep, sheet],
+                    [status, files, review_state, review_lang, review_table, save_btn],
                 )
-            go = gr.Button("Translate lesson", variant="primary", size="lg", elem_id="go")
-            status = gr.Markdown()
-            files = gr.File(
-                label="Download one file per language, and the class pack (.zip)",
-                file_count="multiple",
-                visible=False,
-            )
-            review_state = gr.State({})
-            review_lang = gr.Dropdown(label="Review language", choices=[], visible=False)
-            review_table = gr.Dataframe(
-                headers=["English", "Translation (click a cell to edit)"],
-                datatype=["str", "str"],
-                static_columns=[0],
-                interactive=True,
-                wrap=True,
-                visible=False,
-                type="array",
-            )
-            save_btn = gr.Button("Save my edits", visible=False)
-            edited = gr.File(label="Your edited file", visible=False)
-            go.click(
-                on_translate,
-                [text, upload, targets, mode, keep, sheet],
-                [status, files, review_state, review_lang, review_table, save_btn],
-            )
-            review_lang.change(on_review_language, [review_state, review_lang], review_table)
-            save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
+                review_lang.change(on_review_language, [review_state, review_lang], review_table)
+                save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
+        app.load(library.on_load, None, [library.course, *library.view])
+        library.send.click(
+            lambda course, name: (
+                (
+                    str(courses_home.course_path(course) / "lectures" / name),
+                    gr.Tabs(selected="lecture"),
+                )
+                if course and name
+                else (None, gr.Tabs())
+            ),
+            [library.course, library.item],
+            [v_upload, tabs],
+        )
         gr.Markdown(NOTE)
     return app
 
@@ -572,11 +613,32 @@ def warm_up(holder: ModelHolder, mode: Mode) -> None:
     threading.Thread(target=load, daemon=True).start()
 
 
-def launch(port: int = 7860, share: bool = False, warm: Mode | None = None) -> None:
-    """Start the web interface on this computer, optionally preloading a model."""
+def launch(
+    port: int = 7860,
+    share: bool = False,
+    warm: Mode | None = None,
+    lan: bool = False,
+    workspace_root: Path | None = None,
+) -> None:
+    """Start the web interface on this computer, optionally preloading a model.
+
+    With `lan`, other devices on the same Wi-Fi or hotspot can open it, with no internet.
+    """
 
     holder = ModelHolder()
     if warm:
         warm_up(holder, warm)
-    app = build_app(holder)
-    app.launch(server_port=port, share=share, theme=make_theme(), css=GREEN_CSS, js=FORCE_LIGHT_JS)
+    if lan:
+        address = lan_address(port)
+        print(f"Students on this network can open: {address or 'your computer address'}")
+        print("Only use this on a network you trust: anyone on it can use the app.")
+    courses_home = Workspace(workspace_root or default_workspace_root())
+    build_app(holder, workspace=courses_home).launch(
+        server_name="0.0.0.0" if lan else None,
+        server_port=port,
+        share=share,
+        theme=make_theme(),
+        css=GREEN_CSS,
+        js=FORCE_LIGHT_JS,
+        allowed_paths=[str(courses_home.root)],
+    )

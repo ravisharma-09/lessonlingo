@@ -54,11 +54,13 @@ def test_model_holder_closes_previous_mode() -> None:
     assert len(created) == 2 and closed == [1]
 
 
-def test_build_app_creates_blocks() -> None:
+def test_build_app_creates_blocks(tmp_path: Path) -> None:
     pytest.importorskip("gradio")
     from lessonlingo.app import build_app
+    from lessonlingo.workspace import Workspace
 
-    assert build_app(ModelHolder(lambda mode: FakeTranslator())) is not None
+    home = Workspace(tmp_path / "home")
+    assert build_app(ModelHolder(lambda mode: FakeTranslator()), workspace=home) is not None
 
 
 def test_offline_env_var_enables_offline_mode(
@@ -169,3 +171,25 @@ def test_sample_lecture_ships_with_the_repo() -> None:
     from lessonlingo.subtitles import load_subtitles
 
     assert len(load_subtitles(SAMPLE_LECTURE)) >= 3
+
+
+def test_launch_accepts_every_option_the_cli_passes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import inspect
+
+    from lessonlingo import app
+
+    class Dummy:
+        def launch(self, **kwargs: object) -> None:
+            Dummy.kwargs = kwargs
+
+    monkeypatch.setattr(app, "build_app", lambda holder, workspace: Dummy())
+
+    app.launch(port=7000, warm=None, lan=True, workspace_root=tmp_path)
+
+    assert Dummy.kwargs["server_name"] == "0.0.0.0"
+    assert Dummy.kwargs["allowed_paths"] == [str(tmp_path.resolve())]
+    assert {"port", "share", "warm", "lan", "workspace_root"} <= set(
+        inspect.signature(app.launch).parameters
+    )
