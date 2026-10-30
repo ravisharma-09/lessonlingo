@@ -49,6 +49,14 @@ NOTE = (
     "Machine translation can be wrong, so ask a speaker to check important material."
 )
 
+FORCE_LIGHT_JS = """() => {
+  const url = new URL(window.location);
+  if (url.searchParams.get('__theme') !== 'light') {
+    url.searchParams.set('__theme', 'light');
+    window.location.href = url.href;
+  }
+}"""
+
 GREEN_CSS = """
 .gradio-container { max-width: 960px !important; margin: 0 auto !important; }
 #hero { display: flex; flex-wrap: wrap; gap: 20px; align-items: center;
@@ -310,8 +318,7 @@ def build_app(
         pack = make_class_pack([Path(p) for p in paths], Path(paths[0]).parent / f"{stem}.zip")
         return (
             f"Done. {len(paths)} file(s) ready. Check each line below, fix any, then save.",
-            [*paths, str(pack)],
-            preview,
+            gr.File(value=[*paths, str(pack)], visible=True),
             review,
             gr.Dropdown(
                 choices=[(SUPPORTED_LANGUAGES[c], c) for c in docs], value=first, visible=True
@@ -325,11 +332,12 @@ def build_app(
             return gr.Dataframe()
         return gr.Dataframe(value=review_rows(*review["docs"][code]), visible=True)
 
-    def on_save_review(review: dict[str, Any], code: str, rows: Any) -> str:
+    def on_save_review(review: dict[str, Any], code: str, rows: Any) -> Any:
         if not review or code not in review["docs"]:
             raise gr.Error("Translate a lesson first.")
         table = rows.values.tolist() if hasattr(rows, "values") else rows
-        return save_review(review["docs"][code][0], table, review["stem"], code)
+        path = save_review(review["docs"][code][0], table, review["stem"], code)
+        return gr.File(value=path, visible=True)
 
     language_choices = [(f"{name} ({code})", code) for code, name in SUPPORTED_LANGUAGES.items()]
 
@@ -394,20 +402,20 @@ def build_app(
         first = next(iter(vtt))
         return (
             f"Done. {len(written)} subtitle files and a class pack are ready.",
-            [*map(str, written), str(pack)],
+            gr.File(value=[*map(str, written), str(pack)], visible=True),
             vtt,
             gr.Dropdown(
                 choices=[(SUPPORTED_LANGUAGES[c], c) for c in vtt], value=first, visible=True
             ),
-            gr.Video(value=upload, subtitles=vtt[first])
+            gr.Video(value=upload, subtitles=vtt[first], visible=True)
             if not str(upload).endswith((".srt", ".vtt"))
-            else gr.Video(),
+            else gr.Video(visible=False),
         )
 
     def on_language(upload: str | None, vtt: dict[str, str], code: str) -> Any:
         if not upload or code not in vtt or str(upload).endswith((".srt", ".vtt")):
-            return gr.Video()
-        return gr.Video(value=upload, subtitles=vtt[code])
+            return gr.Video(visible=False)
+        return gr.Video(value=upload, subtitles=vtt[code], visible=True)
 
     with gr.Blocks(title="LessonLingo") as app:
         gr.HTML(HERO_HTML)
@@ -431,15 +439,16 @@ def build_app(
                 label="2. Pick languages", choices=language_choices, value=["kan_Knda", "hin_Deva"]
             )
             v_mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
-            v_keep = gr.Textbox(
-                label="Keep these words in English (optional, separated by commas)",
-                placeholder="photosynthesis, Python",
-            )
-            v_sheet = gr.File(
-                label="Course glossary (optional .csv: term, then the exact word per language)",
-                file_types=[".csv"],
-                type="filepath",
-            )
+            with gr.Accordion("Optional: keep or fix technical words", open=False):
+                v_keep = gr.Textbox(
+                    label="Keep these words in English (separated by commas)",
+                    placeholder="photosynthesis, Python",
+                )
+                v_sheet = gr.File(
+                    label="Course glossary (.csv: term, then the exact word per language)",
+                    file_types=[".csv"],
+                    type="filepath",
+                )
             v_listen = gr.Button("1. Listen to the lecture", variant="primary", size="lg")
             v_status = gr.Markdown()
             v_heard = gr.State({})
@@ -455,10 +464,11 @@ def build_app(
             v_go = gr.Button("2. Translate", variant="primary", size="lg", visible=False)
             v_state = gr.State({})
             v_lang = gr.Dropdown(label="Watch with subtitles in", choices=[], visible=False)
-            v_player = gr.Video(label="Lecture", interactive=False)
+            v_player = gr.Video(label="Lecture", interactive=False, visible=False)
             v_files = gr.File(
                 label="Download subtitles (.srt, .vtt) and the class pack (.zip)",
                 file_count="multiple",
+                visible=False,
             )
             v_listen.click(
                 on_listen,
@@ -489,18 +499,23 @@ def build_app(
                 label="2. Pick languages", choices=language_choices, value=["hin_Deva", "kan_Knda"]
             )
             mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
-            keep = gr.Textbox(
-                label="Keep these words in English (optional, separated by commas)",
-                placeholder="photosynthesis, Python",
-            )
-            sheet = gr.File(
-                label="Course glossary (optional .csv: term, then the exact word per language)",
-                file_types=[".csv"],
-                type="filepath",
-            )
+            with gr.Accordion("Optional: keep or fix technical words", open=False):
+                keep = gr.Textbox(
+                    label="Keep these words in English (separated by commas)",
+                    placeholder="photosynthesis, Python",
+                )
+                sheet = gr.File(
+                    label="Course glossary (.csv: term, then the exact word per language)",
+                    file_types=[".csv"],
+                    type="filepath",
+                )
             go = gr.Button("Translate lesson", variant="primary", size="lg", elem_id="go")
             status = gr.Markdown()
-            files = gr.File(label="Download one file per language", file_count="multiple")
+            files = gr.File(
+                label="Download one file per language, and the class pack (.zip)",
+                file_count="multiple",
+                visible=False,
+            )
             review_state = gr.State({})
             review_lang = gr.Dropdown(label="Review language", choices=[], visible=False)
             review_table = gr.Dataframe(
@@ -513,12 +528,11 @@ def build_app(
                 type="array",
             )
             save_btn = gr.Button("Save my edits", visible=False)
-            edited = gr.File(label="Your edited file")
-            preview = gr.Textbox(label="Preview", lines=12, interactive=False)
+            edited = gr.File(label="Your edited file", visible=False)
             go.click(
                 on_translate,
                 [text, upload, targets, mode, keep, sheet],
-                [status, files, preview, review_state, review_lang, review_table, save_btn],
+                [status, files, review_state, review_lang, review_table, save_btn],
             )
             review_lang.change(on_review_language, [review_state, review_lang], review_table)
             save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
@@ -545,4 +559,4 @@ def launch(port: int = 7860, share: bool = False, warm: Mode | None = None) -> N
     if warm:
         warm_up(holder, warm)
     app = build_app(holder)
-    app.launch(server_port=port, share=share, theme=make_theme(), css=GREEN_CSS)
+    app.launch(server_port=port, share=share, theme=make_theme(), css=GREEN_CSS, js=FORCE_LIGHT_JS)
