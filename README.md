@@ -142,7 +142,8 @@ lessonlingo video .\lecture.mp4 --to kan_Knda hin_Deva --mode light --offline --
 ```
 
 This writes `lecture.en.srt` plus `lecture.<lang>.srt` and `.vtt` per language. An
-existing `.srt`/`.vtt` file also works and skips speech recognition. If the speech model
+existing `.srt`/`.vtt` file also works and skips speech recognition. Add `--embed` to also write `lecture.subtitled.mp4`, which holds every language as a
+selectable subtitle track (VLC and most players can switch them). If the speech model
 fails on CUDA, add `--whisper-device cpu`.
 
 ### Web UI
@@ -274,7 +275,7 @@ The full script is in [docs/DEMO.md](docs/DEMO.md). Short version:
 - Sentence segmentation is intentionally simple and dependency-light.
 - Quality mode requires CUDA and may not fit every GPU configuration.
 - Speech recognition can mishear technical terms, so review subtitles before publishing.
-- Subtitles are not burned into the video; use the `.vtt`/`.srt` with any player.
+- Subtitles are added as selectable tracks (`--embed`), not burned into the picture.
 - Real model loading and generated-language quality are not verified on the Mac.
 
 ## AI tools used
