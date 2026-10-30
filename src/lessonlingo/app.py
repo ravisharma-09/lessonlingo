@@ -16,6 +16,7 @@ from lessonlingo.languages import SUPPORTED_LANGUAGES, validate_targets
 from lessonlingo.markdown_io import Segment, rebuild
 from lessonlingo.pipeline import translate_segments
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
+from lessonlingo.ui_assets import HERO_HTML
 from lessonlingo.video import FasterWhisperTranscriber, Transcriber, translate_video
 
 DEFAULT_TEXT = (
@@ -38,10 +39,21 @@ NOTE = (
 )
 
 GREEN_CSS = """
-.gradio-container { max-width: 880px !important; margin: 0 auto !important; }
-#title h1 { color: #166534; font-size: 2rem; margin-bottom: 0; }
-#subtitle { color: #4b5563; margin-top: 4px; }
-#go button, button#go { font-size: 1.1rem; padding: 14px; }
+.gradio-container { max-width: 960px !important; margin: 0 auto !important; }
+#hero { display: flex; flex-wrap: wrap; gap: 20px; align-items: center;
+  justify-content: space-between; padding: 8px 0 12px; }
+#hero .text { flex: 1 1 380px; min-width: 0; }
+#hero .eyebrow { font-family: "Space Mono", monospace; font-weight: 700; font-size: 13px;
+  letter-spacing: .12em; color: #b45309; }
+#hero h1 { margin: 6px 0; font-size: 2.3rem; line-height: 1.1;
+  color: var(--body-text-color); letter-spacing: -.02em; }
+#hero p { margin: 0; font-size: 1.1rem; color: var(--body-text-color-subdued); }
+#hero .tile { background: #2d4540; border-radius: 20px; padding: 14px 20px; display: flex;
+  gap: 14px; align-items: flex-end; }
+#hero .tile svg { image-rendering: pixelated; }
+#strip { height: 14px; margin-bottom: 14px; background: repeating-linear-gradient(90deg,
+  #8fb4e3 0 28px, #f5b524 28px 56px, #ea7b78 56px 84px, #e2461f 84px 112px); }
+#go button, button#go { font-size: 1.15rem; padding: 14px; }
 """
 
 
@@ -54,7 +66,7 @@ def make_theme() -> Any:
         primary_hue="green",
         neutral_hue="slate",
         radius_size="lg",
-        font=[gr.themes.GoogleFont("Nunito"), "system-ui", "sans-serif"],
+        font=[gr.themes.GoogleFont("Figtree"), "system-ui", "sans-serif"],
     )
 
 
@@ -293,11 +305,7 @@ def build_app(
         return gr.Video(value=upload, subtitles=vtt[code])
 
     with gr.Blocks(title="LessonLingo") as app:
-        gr.Markdown("# LessonLingo", elem_id="title")
-        gr.Markdown(
-            "Free lectures in your language. Set up once, then no internet needed.",
-            elem_id="subtitle",
-        )
+        gr.HTML(HERO_HTML)
         with gr.Tab("Lecture video"):
             v_upload = gr.File(
                 label="1. Add an English lecture (video, audio, or a .srt file)",
