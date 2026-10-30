@@ -91,3 +91,56 @@ def test_bad_inputs_are_rejected(tmp_path: Path) -> None:
         translate_video(tmp_path / "nope.mp4", ["hin_Deva"], "light", tmp_path)
     with pytest.raises(ValueError):
         translate_video(other, ["hin_Deva"], "light", tmp_path, translator=FakeTranslator())
+
+
+def test_embed_command_maps_each_language_as_a_track() -> None:
+    command = video.ffmpeg_embed_command(
+        Path("in.mp4"),
+        {"kan_Knda": Path("a.srt"), "ory_Orya": Path("b.srt")},
+        Path("out.mp4"),
+    )
+
+    assert command.count("-i") == 3 and "mov_text" in command
+    assert "language=kan" in command and "language=ori" in command
+    assert command[-1] == "out.mp4"
+
+
+def test_embed_subtitles_with_real_ffmpeg(tmp_path: Path) -> None:
+    import shutil
+    import subprocess
+
+    if shutil.which("ffmpeg") is None:
+        pytest.skip("ffmpeg is not installed")
+    clip = tmp_path / "clip.mp4"
+    made = subprocess.run(
+        [
+            "ffmpeg",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=green:s=160x90:d=2",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=d=2",
+            "-shortest",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "aac",
+            str(clip),
+        ],
+        capture_output=True,
+    )
+    if made.returncode != 0:
+        pytest.skip("this ffmpeg cannot make a test clip")
+    srt = tmp_path / "a.srt"
+    srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nHello\n", encoding="utf-8")
+
+    out = video.embed_subtitles(clip, {"kan_Knda": srt}, tmp_path / "out.mp4")
+
+    probe = subprocess.run(["ffmpeg", "-i", str(out)], capture_output=True, text=True)
+    assert "Subtitle" in probe.stderr

@@ -134,6 +134,40 @@ def extract_audio(video: Path, wav: Path) -> None:
         raise RuntimeError(f"ffmpeg could not read that file: {result.stderr.strip()[-300:]}")
 
 
+def _iso_language(code: str) -> str:
+    """IndicTrans2 code (kan_Knda) to the ISO 639-2 tag players expect (kan)."""
+
+    return {"ory": "ori"}.get(code[:3], code[:3])
+
+
+def ffmpeg_embed_command(video: Path, subtitles: dict[str, Path], out: Path) -> list[str]:
+    """Build the ffmpeg command that adds each subtitle file as a selectable mp4 track."""
+
+    command = ["ffmpeg", "-y", "-i", str(video)]
+    for path in subtitles.values():
+        command += ["-i", str(path)]
+    command += ["-map", "0:v", "-map", "0:a?"]
+    for index in range(len(subtitles)):
+        command += ["-map", str(index + 1)]
+    command += ["-c:v", "copy", "-c:a", "copy", "-c:s", "mov_text"]
+    for index, code in enumerate(subtitles):
+        command += [f"-metadata:s:s:{index}", f"language={_iso_language(code)}"]
+    return command + [str(out)]
+
+
+def embed_subtitles(video: Path, subtitles: dict[str, Path], out: Path) -> Path:
+    """Write a copy of the video with every translated subtitle as a selectable track."""
+
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg was not found. Install it once, then try again.")
+    result = subprocess.run(
+        ffmpeg_embed_command(video, subtitles, out), capture_output=True, text=True, check=False
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg could not add subtitles: {result.stderr.strip()[-300:]}")
+    return out
+
+
 def translate_cues(
     cues: list[Cue],
     targets: list[str],

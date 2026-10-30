@@ -81,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     video_parser.add_argument("--whisper-device", help="cuda or cpu for speech recognition")
     video_parser.add_argument("--out", type=Path, default=Path("outputs"))
+    video_parser.add_argument(
+        "--embed",
+        action="store_true",
+        help="also write <name>.subtitled.mp4 with every language as a selectable subtitle track",
+    )
     video_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
     video_parser.add_argument("--keep", nargs="+", default=[], metavar="TERM", help=KEEP_HELP)
 
@@ -168,6 +173,12 @@ def _run_video(args: argparse.Namespace, translator: Translator | None) -> int:
             backend.close()
     for output_path in paths:
         print(output_path)
+    if args.embed:
+        from lessonlingo.video import embed_subtitles
+
+        tracks = {p.name.split(".")[-2]: p for p in paths if p.suffix == ".srt"}
+        tracks.pop("en", None)
+        print(embed_subtitles(args.file, tracks, args.out / f"{args.file.stem}.subtitled.mp4"))
     return 0
 
 
