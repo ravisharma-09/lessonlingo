@@ -50,7 +50,7 @@ def _split_sentences(text: str, segments: list[Segment]) -> None:
         content = piece[leading_length:content_end]
         trailing = piece[content_end:]
         _append(segments, leading, False)
-        _append(segments, content, bool(content.strip()))
+        _append(segments, content, bool(re.search(r"\w", content, re.UNICODE)))
         _append(segments, trailing, False)
 
 
