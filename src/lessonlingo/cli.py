@@ -12,9 +12,8 @@ from lessonlingo.languages import SUPPORTED_LANGUAGES
 from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_file, translate_folder
 from lessonlingo.setup_models import enable_offline_mode, run_setup, run_verify
-from lessonlingo.subtitles import load_subtitles
 from lessonlingo.translator import IndicTransTranslator, Translator
-from lessonlingo.tts import MMSSynthesizer, Synthesizer, add_dubbed_audio, render_dub
+from lessonlingo.tts import MMSSynthesizer, Synthesizer, dub_subtitles
 from lessonlingo.video import FasterWhisperTranscriber, Transcriber
 from lessonlingo.workspace import DEFAULT_TARGETS, Workspace
 
@@ -258,22 +257,14 @@ def _dub(
 ) -> None:
     """Speak each translated subtitle file; add the voices to the video when it is a video."""
 
-    synthesizer = synthesizer_factory()
-    tracks: dict[str, Path] = {}
-    try:
-        for srt in (p for p in paths if p.suffix == ".srt"):
-            code = srt.name.split(".")[-2]
-            if code == "en":
-                continue
-            wav, delay = render_dub(load_subtitles(srt), code, synthesizer, srt.with_suffix(".wav"))
-            print(wav)
-            if delay > 1:
-                print(f"Note: the {code} voice runs up to {delay:.1f}s behind the picture.")
-            tracks[code] = wav
-    finally:
-        synthesizer.close()
-    if args.file.suffix.lower() in {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"} and tracks:
-        print(add_dubbed_audio(args.file, tracks, args.out / f"{args.file.stem}.dubbed.mp4"))
+    for path in dub_subtitles(
+        [p for p in paths if p.suffix == ".srt"],
+        args.file,
+        args.out,
+        synthesizer_factory(),
+        note=lambda message: print(f"Note: {message}"),
+    ):
+        print(path)
 
 
 def _run_video(

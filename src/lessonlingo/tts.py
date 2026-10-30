@@ -10,10 +10,11 @@ from __future__ import annotations
 import subprocess
 import wave
 from array import array
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from lessonlingo.subtitles import Cue
+from lessonlingo.subtitles import Cue, load_subtitles
 
 # IndicTrans2 language code -> ISO 639-3 suffix of the facebook/mms-tts-<code> repository.
 # Not every repository was checked; a missing one fails with a clear message.
@@ -222,3 +223,41 @@ def add_dubbed_audio(video: Path, tracks: dict[str, Path], out: Path) -> Path:
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg could not add the dubbed audio: {result.stderr.strip()[-300:]}")
     return out
+
+
+VIDEO_SUFFIXES = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v"}
+
+
+def dub_subtitles(
+    srt_files: list[Path],
+    source: Path | None,
+    out_dir: Path,
+    synthesizer: Synthesizer,
+    note: Callable[[str], None] | None = None,
+) -> list[Path]:
+    """Speak translated subtitle files; add the voices to the video when `source` is a video.
+
+    Files named `<stem>.<language code>.srt` get a `<stem>.<language code>.wav`. The English
+    transcript is skipped. Returns the files written. The synthesizer is closed at the end.
+    """
+
+    out_dir = Path(out_dir)
+    tracks: dict[str, Path] = {}
+    written: list[Path] = []
+    try:
+        for srt in srt_files:
+            code = srt.name.split(".")[-2]
+            if code not in VOICE_SUFFIX:
+                continue
+            wav, delay = render_dub(
+                load_subtitles(srt), code, synthesizer, out_dir / f"{srt.stem}.wav"
+            )
+            written.append(wav)
+            tracks[code] = wav
+            if delay > 1 and note:
+                note(f"The {code} voice runs up to {delay:.1f}s behind the picture.")
+    finally:
+        synthesizer.close()
+    if source is not None and source.suffix.lower() in VIDEO_SUFFIXES and tracks:
+        written.append(add_dubbed_audio(source, tracks, out_dir / f"{source.stem}.dubbed.mp4"))
+    return written
