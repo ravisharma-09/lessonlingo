@@ -10,8 +10,8 @@ students who need local access to English-only educational material.
 
 ## Project status
 
-Phase 1 provides the core translation pipeline and command-line interface.
-The Gradio upload page is planned for Phase 2 and is not available yet. Unit
+Phases 1 and 2 provide the translation pipeline, the command-line interface and
+a Gradio web page (`lessonlingo app`). Video subtitles are not built yet. Unit
 tests use a deterministic fake translator and never download model files.
 
 ## What "offline" means
@@ -130,8 +130,21 @@ Output names follow `<source>.<language-code>.md`, for example
 
 ### Web UI
 
-The Gradio upload interface is a Phase 2 deliverable and is not implemented in
-Phase 1. This section will contain its launch command after that flow is tested.
+```powershell
+lessonlingo app --offline
+```
+
+Open http://127.0.0.1:7860. Paste a lesson or upload a `.md`/`.txt` file, pick
+languages, choose quick or best quality, and download one file per language.
+`--offline` (or `LESSONLINGO_OFFLINE=1`) blocks all Hugging Face network calls,
+so models must already be downloaded by `lessonlingo setup`.
+
+Quick checks on the GPU laptop:
+
+```powershell
+python scripts/smoke.py --mode light --offline
+python scripts/bench.py   # writes docs/benchmarks.md
+```
 
 ## Supported languages
 
@@ -157,8 +170,8 @@ The source language is always English (`eng_Latn`).
 | Quality | IndicTrans2 En-Indic 1B | CUDA GPU | 8 | Not measured | Not measured |
 | Light | IndicTrans2 En-Indic 200M | CUDA or CPU | 16 | Not measured | Not measured |
 
-The timing fields remain explicitly unverified until `scripts/bench.py` is
-implemented in Phase 2 and run on the Windows GPU laptop.
+Timing fields stay "Not measured" until `scripts/bench.py` is run on the Windows GPU
+laptop; results are written to `docs/benchmarks.md`.
 
 ## Proving local operation after setup
 
@@ -215,6 +228,8 @@ pytest -m "not gpu"
 
 ## Demo flow
 
+The full script is in [docs/DEMO.md](docs/DEMO.md). Short version:
+
 1. While online, show the accepted model pages and run `lessonlingo setup`.
 2. Turn off Wi-Fi.
 3. Translate `samples/short_lesson_en.md` into Hindi, Kannada, and Tamil.
@@ -228,7 +243,7 @@ pytest -m "not gpu"
   educational material before it is published or taught.
 - Sentence segmentation is intentionally simple and dependency-light.
 - Quality mode requires CUDA and may not fit every GPU configuration.
-- The current phase has no Gradio interface or video subtitle support.
+- Video subtitle support is not implemented yet.
 - Real model loading and generated-language quality are not verified on the Mac.
 
 ## Credits and licences
