@@ -219,3 +219,16 @@ def test_player_html_attaches_every_language_and_defaults_the_chosen_one() -> No
         and "kan_Knda.vtt" in html.split(" default>")[0].split("<track")[-1]
     )
     assert "%20" in html and "/gradio_api/file=" in html  # spaces in paths are escaped
+
+
+def test_player_urls_handle_windows_paths() -> None:
+    from lessonlingo.app import player_html
+
+    html = player_html(
+        "C:\\Users\\Teacher\\AppData\\Local\\Temp\\a b\\talk.mp4",
+        {"kan_Knda": "C:\\Users\\Teacher\\talk.kan_Knda.vtt"},
+        "kan_Knda",
+    )
+
+    assert "file=C:/Users/Teacher/AppData/Local/Temp/a%20b/talk.mp4" in html
+    assert "\\" not in html

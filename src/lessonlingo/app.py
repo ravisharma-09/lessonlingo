@@ -310,7 +310,9 @@ SUBTITLE_LANGUAGE = {
 
 
 def _file_url(path: str) -> str:
-    return "/gradio_api/file=" + quote(str(Path(path).resolve()), safe="/")
+    """Address Gradio serves a local file at. Windows backslashes become slashes first."""
+
+    return "/gradio_api/file=" + quote(str(path).replace("\\", "/"), safe="/:")
 
 
 def player_html(video: str, subtitles: dict[str, str], selected: str) -> str:
