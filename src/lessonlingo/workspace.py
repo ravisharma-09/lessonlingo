@@ -18,13 +18,14 @@ from lessonlingo.glossary import GlossaryTranslator, load_glossary
 from lessonlingo.languages import SUPPORTED_LANGUAGES, validate_targets
 from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import LESSON_SUFFIXES, translate_file
-from lessonlingo.subtitles import Cue
+from lessonlingo.subtitles import Cue, format_timestamp
 from lessonlingo.translator import Mode, Translator
 from lessonlingo.video import (
     SUBTITLE_SUFFIXES,
     VIDEO_SUFFIXES,
     StatusCallback,
     Transcriber,
+    is_doubtful,
     transcribe_lecture,
     translate_lecture,
 )
@@ -241,9 +242,26 @@ class Workspace:
         heard: dict[str, list[Cue]] = {}
         for item, _ in pending:
             if item.kind == "lecture":
-                heard[item.name] = transcribe_lecture(
+                cues = transcribe_lecture(
                     item.path, transcriber_factory(hotwords=terms), lambda m, i=item: say(i, m)
                 )
+                heard[item.name] = cues
+                doubtful = [c for c in cues if is_doubtful(c)]
+                if doubtful:
+                    report = self.output_dir(course, item.stem) / f"{item.stem}.check.txt"
+                    report.parent.mkdir(parents=True, exist_ok=True)
+                    report.write_text(
+                        "Lines the speech model was unsure about. Check them against the audio,\n"
+                        "fix the English in the Lecture video tab, then translate again.\n\n"
+                        + "\n".join(
+                            f"{format_timestamp(c.start)[:8]}  {c.text}"
+                            + (f"   (check: {', '.join(c.weak_words)})" if c.weak_words else "")
+                            for c in doubtful
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+                    say(item, f"{len(doubtful)} line(s) may be misheard, see {report.name}")
 
         written: list[Path] = []
         for item, wanted in pending:

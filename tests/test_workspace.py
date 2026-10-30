@@ -105,3 +105,20 @@ def test_trash_moves_file_and_outputs_instead_of_deleting(ws: Workspace, tmp_pat
     assert not ws.output_dir("Maths", "talk").exists()
     with pytest.raises(FileNotFoundError):
         ws.trash_item("Maths", "../../etc/passwd")
+
+
+def test_batch_writes_a_check_list_for_doubtful_lines(
+    ws: Workspace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(video, "extract_audio", lambda source, wav: wav.write_bytes(b""))
+    ws.create_course("Bio", ["hin_Deva"])
+    clip = tmp_path / "cells.mp4"
+    clip.write_bytes(b"x")
+    ws.add_file("Bio", clip)
+    messages: list[str] = []
+
+    ws.translate_course("Bio", FakeTranslator(), FakeTranscriber, status=messages.append)
+
+    report = (ws.output_dir("Bio", "cells") / "cells.check.txt").read_text(encoding="utf-8")
+    assert "oceans" in report and "Water moves" in report
+    assert any("may be misheard" in m for m in messages)

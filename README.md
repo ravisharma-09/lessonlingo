@@ -228,7 +228,11 @@ the voice files, the dubbed video and a "Hear the translation" player.
 ### Course glossary, transcript check and class pack
 
 - **Check the English first.** In the Lecture video tab, press Listen, fix any mistakes in the
-  English transcript (lines the speech model was unsure about are marked Check), then Translate.
+  English transcript, then Translate. Lines the speech model was unsure about are marked Check, with
+  the doubtful words named (for example `Check: flay, fart`). The word threshold (probability below
+  0.5) is a starting guess; `scripts/show_scores.py` prints the numbers to tune it. When a whole
+  course is translated in one go, each lecture with doubtful lines gets an `<name>.check.txt` list
+  in its outputs folder.
   Errors in the transcript would otherwise be translated too.
 - **Course glossary.** A CSV with a `term` column and one column per language code, for example:
 
