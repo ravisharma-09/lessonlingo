@@ -53,7 +53,7 @@ flowchart LR
 | `subtitles.py` | `Cue`, `parse_subtitles`, `load_subtitles`, `to_srt`, `to_vtt`, `with_text`, `wrap_text` | SRT and WebVTT. Wraps at 42 characters. |
 | `video.py` | `Transcriber`, `FakeTranscriber`, `FasterWhisperTranscriber`, `extract_audio`, `translate_video`, `embed_subtitles` | Status callback reports each stage. |
 | `workspace.py` | `Workspace(root)`, `create_course`, `add_file`, `list_items`, `translate_course`, `trash_item`, `course_pack` | Courses on disk. Lectures are all transcribed first, then all translated. |
-| `library.py` | `build_library_tab(...)` | The My courses tab. |
+| `library.py` | `build_library_tab(...)` | The Courses tab. |
 | `tts.py` | `Synthesizer`, `FakeSynthesizer`, `MMSSynthesizer`, `render_dub`, `dub_subtitles`, `add_dubbed_audio` | Optional spoken dubbing (MMS voices, non-commercial licence). CLI flag and a checkbox in the app. |
 | `pack.py` | `make_class_pack(files, zip_path)` | Zip with START_HERE.txt for sharing. |
 | `setup_models.py` | `run_setup`, `run_verify`, `enable_offline_mode` | Downloads IndicTrans2 1B and 200M plus the Whisper model. |
@@ -76,6 +76,16 @@ The interface is plain, bright and roomy. Beginners should know what to do in on
 | Mint | `#e8f7ed` | Selected chips, notes |
 | Mustard `#f5b524`, coral `#ea7b78`, blue `#8fb4e3`, red `#e2461f` | Halloween accents only: the colour strip, pixel pumpkin, ghost and bat |
 | Fonts | Figtree (text), Space Mono (small labels) | Base size 16 to 17px, buttons are whole words |
+
+Layout (one step on screen at a time):
+- **Lecture tab:** a step bar (Add, Check, Watch). Add: drop area, language tiles, folded Options
+  (run mode, kept words, glossary, dubbing), one big Continue button. Check: the English
+  transcript table with doubtful words marked, Back and Translate. Watch: language buttons above the
+  player, voice player, downloads, Translate another lecture.
+- **Lesson tab:** Add, then Review (editable translation table, save, downloads).
+- **Courses tab:** course picker, file adder, table, Translate everything.
+- One spacing system: 720px page, 22px between blocks, 10px between tiles, 56px controls. The styling
+  lives in `ui_assets.py`.
 
 Component rules:
 - Three steps in order: add the lecture, pick languages, choose how it runs. One big green button.

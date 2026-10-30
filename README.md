@@ -11,7 +11,7 @@ students who need local access to English-only educational material.
 ## Project status
 
 LessonLingo translates text lessons and English lecture videos. The video flow
-(`lessonlingo video`, or the Lecture video tab in `lessonlingo app`) extracts audio
+(`lessonlingo video`, or the Lecture tab in `lessonlingo app`) extracts audio
 with ffmpeg, transcribes it with faster-whisper, frees the speech model, then
 translates each subtitle with IndicTrans2 and writes `.srt` and `.vtt` files.
 The video flow is tested with fakes on the Mac and still needs a real run on the GPU laptop. Unit
@@ -155,7 +155,7 @@ lessonlingo app --offline
 Open http://127.0.0.1:7860. Paste a lesson or upload a `.md`/`.txt` file, pick
 languages, choose quick or best quality, and download one file per language.
 `--lan` lets phones and laptops on the same Wi-Fi or hotspot open the app, with no
-internet; use it only on a network you trust. The Lecture video tab has a "Try the sample lecture"
+internet; use it only on a network you trust. The Lecture tab has a "No file? Try the sample lecture"
 button that needs no video file. `--warm light` (or `quality`) loads that model in the background so the first translation
 is fast. `--offline` (or `LESSONLINGO_OFFLINE=1`) blocks all Hugging Face network calls,
 so models must already be downloaded by `lessonlingo setup`.
@@ -169,7 +169,7 @@ python scripts/bench.py   # writes docs/benchmarks.md
 
 ### Review and keep-in-English
 
-In the web UI, the Text lesson tab shows English and the translation side by side after
+In the web UI, the Lesson tab shows English and the translation side by side after
 translating. Click a translation cell to fix it, then press Save my edits to download the
 corrected file. Type words such as `photosynthesis, Python` in the keep-in-English box (or
 use `--keep photosynthesis Python` on the command line) to leave them untranslated. Kept
@@ -181,7 +181,7 @@ The data flow, module interfaces and UI system are described in
 
 ### My courses (folders, videos and batch translation)
 
-The first tab of the web app keeps whole courses on disk, under `~/LessonLingo` by default
+The Courses tab of the web app keeps whole courses on disk, under `~/LessonLingo` by default
 (`--workspace PATH` or `LESSONLINGO_HOME` changes it):
 
 ```
@@ -222,12 +222,12 @@ longer than their subtitle slot are sped up by at most 1.3 times; after that the
 slightly behind the picture and the command prints the delay. Whether a voice exists for each of
 the ten languages has not been checked; a missing one reports a clear error. This feature is
 tested with a fake voice on the development machine; the real voices must be tried on the GPU
-laptop. In the web app, tick "Also speak the translation" on the Lecture video tab; you then get
+laptop. In the web app, tick "Also speak the translation" on the Lecture tab; you then get
 the voice files, the dubbed video and a "Hear the translation" player.
 
 ### Course glossary, transcript check and class pack
 
-- **Check the English first.** In the Lecture video tab, press Listen, fix any mistakes in the
+- **Check the English first.** In the Lecture tab, press Continue, fix any mistakes in the
   English transcript, then Translate. Lines the speech model was unsure about are marked Check, with
   the doubtful words named (for example `Check: flay, fart`). The word threshold (probability below
   0.5) is a starting guess; `scripts/show_scores.py` prints the numbers to tune it. When a whole
