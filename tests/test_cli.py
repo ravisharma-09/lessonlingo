@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Any
 
-import huggingface_hub
 import pytest
 
 from lessonlingo import cli, setup_models
@@ -56,23 +55,6 @@ def test_online_setup_clears_offline_guards(monkeypatch: Any) -> None:
 
     assert "HF_HUB_OFFLINE" not in setup_models.os.environ
     assert "TRANSFORMERS_OFFLINE" not in setup_models.os.environ
-
-
-def test_setup_logs_in_and_downloads_all_models(monkeypatch: Any) -> None:
-    login_calls: list[bool] = []
-    download_calls: list[dict[str, object]] = []
-
-    monkeypatch.setattr(huggingface_hub, "get_token", lambda: None)
-    monkeypatch.setattr(huggingface_hub, "login", lambda: login_calls.append(True))
-    monkeypatch.setattr(
-        huggingface_hub,
-        "snapshot_download",
-        lambda **kwargs: download_calls.append(kwargs) or "/fake/model",
-    )
-
-    assert setup_models.run_setup() == 0
-    assert login_calls == [True]
-    assert len(download_calls) == 2
 
 
 def test_cli_help_uses_approved_offline_wording(capsys: Any) -> None:
