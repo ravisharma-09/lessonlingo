@@ -566,7 +566,7 @@ def build_app(
         first = next(iter(vtt))
         return (
             f"Done. {len(written) + len(spoken)} files and a class pack are ready. "
-            "Subtitles are on in the player; use its CC button to turn them off or change language.",
+            "Subtitles are on in the player; use its CC button to change them.",
             gr.File(value=[*map(str, written), *map(str, spoken), str(pack)], visible=True),
             vtt,
             gr.Dropdown(
