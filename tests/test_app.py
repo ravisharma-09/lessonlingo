@@ -203,30 +203,35 @@ def test_launch_accepts_every_option_the_cli_passes(
     )
 
 
-def test_player_html_attaches_every_language_and_defaults_the_chosen_one() -> None:
+def test_player_html_attaches_every_language_and_defaults_the_chosen_one(tmp_path: Path) -> None:
     from lessonlingo.app import player_html
 
+    kan = tmp_path / "talk.kan_Knda.vtt"
+    hin = tmp_path / "talk.hin_Deva.vtt"
+    kan.write_text("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nನೀರು\n", encoding="utf-8")
+    hin.write_text("WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nजल\n", encoding="utf-8")
+
     html = player_html(
-        "/tmp/My course/talk.mp4",
-        {"kan_Knda": "/tmp/My course/talk.kan_Knda.vtt", "hin_Deva": "/tmp/x/talk.hin_Deva.vtt"},
-        "kan_Knda",
+        "/tmp/My course/talk.mp4", {"kan_Knda": str(kan), "hin_Deva": str(hin)}, "kan_Knda"
     )
 
     assert html.count("<track") == 2
-    assert 'srclang="kn"' in html and 'label="Hindi"' in html
-    assert (
-        html.count(" default>") == 1
-        and "kan_Knda.vtt" in html.split(" default>")[0].split("<track")[-1]
-    )
-    assert "%20" in html and "/gradio_api/file=" in html  # spaces in paths are escaped
+    assert 'srclang="kn"' in html and 'label="Hindi"' in html and 'data-code="hin_Deva"' in html
+    chosen = html.split(" default>")[0].split("<track")[-1]
+    assert html.count(" default>") == 1 and 'data-code="kan_Knda"' in chosen
+    assert "data:text/vtt;charset=utf-8;base64," in html
+    assert "/gradio_api/file=/tmp/My%20course/talk.mp4" in html
 
 
-def test_player_urls_handle_windows_paths() -> None:
+def test_player_urls_handle_windows_paths(tmp_path: Path) -> None:
     from lessonlingo.app import player_html
+
+    vtt = tmp_path / "a.vtt"
+    vtt.write_text("WEBVTT\n", encoding="utf-8")
 
     html = player_html(
         "C:\\Users\\Teacher\\AppData\\Local\\Temp\\a b\\talk.mp4",
-        {"kan_Knda": "C:\\Users\\Teacher\\talk.kan_Knda.vtt"},
+        {"kan_Knda": str(vtt)},
         "kan_Knda",
     )
 

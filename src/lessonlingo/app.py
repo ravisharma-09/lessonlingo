@@ -6,6 +6,7 @@ Set up once, then no internet needed: the app only uses models that
 
 from __future__ import annotations
 
+import base64
 import os
 import socket
 import tempfile
@@ -315,21 +316,41 @@ def _file_url(path: str) -> str:
     return "/gradio_api/file=" + quote(str(path).replace("\\", "/"), safe="/:")
 
 
+SWITCH_TRACK_JS = """(code) => {
+  const apply = (tries) => {
+    const video = document.querySelector('#lecture-player video');
+    const tracks = video ? video.querySelectorAll('track') : [];
+    if (!tracks.length) { if (tries > 0) setTimeout(() => apply(tries - 1), 200); return; }
+    tracks.forEach((el) => {
+      if (el.track) el.track.mode = el.dataset.code === code ? 'showing' : 'disabled';
+    });
+  };
+  apply(15);
+}"""
+
+
+def _subtitle_data_url(path: str) -> str:
+    """The subtitle file as a data address, so the player needs no file path or file route."""
+
+    encoded = base64.b64encode(Path(path).read_bytes()).decode("ascii")
+    return f"data:text/vtt;charset=utf-8;base64,{encoded}"
+
+
 def player_html(video: str, subtitles: dict[str, str], selected: str) -> str:
     """A standard browser video player with every language as a subtitle track.
 
-    The chosen language is switched on by default; viewers can also pick one in the player's
-    own captions menu.
+    Subtitles are embedded in the page. The chosen language is switched on by default and by
+    SWITCH_TRACK_JS; viewers can also pick one in the player's own captions menu.
     """
 
     tracks = "".join(
-        f'<track kind="subtitles" src="{_file_url(path)}"'
+        f'<track kind="subtitles" src="{_subtitle_data_url(path)}" data-code="{code}"'
         f' srclang="{SUBTITLE_LANGUAGE.get(code, code)}" label="{SUPPORTED_LANGUAGES[code]}"'
         f"{' default' if code == selected else ''}>"
         for code, path in subtitles.items()
     )
     return (
-        f'<video controls preload="metadata" crossorigin="anonymous" src="{_file_url(video)}" '
+        f'<video controls preload="metadata" src="{_file_url(video)}" '
         f'style="width:100%;border-radius:14px;background:#000">{tracks}</video>'
     )
 
@@ -544,7 +565,8 @@ def build_app(
         wavs = {p.name.split(".")[-2]: str(p) for p in spoken if p.suffix == ".wav"}
         first = next(iter(vtt))
         return (
-            f"Done. {len(written) + len(spoken)} files and a class pack are ready.",
+            f"Done. {len(written) + len(spoken)} files and a class pack are ready. "
+            "Subtitles are on in the player; use its CC button to turn them off or change language.",
             gr.File(value=[*map(str, written), *map(str, spoken), str(pack)], visible=True),
             vtt,
             gr.Dropdown(
@@ -557,18 +579,12 @@ def build_app(
             gr.Audio(value=wavs[first], visible=True) if first in wavs else gr.Audio(visible=False),
         )
 
-    def on_language(
-        upload: str | None, vtt: dict[str, str], wavs: dict[str, str], code: str
-    ) -> tuple[Any, Any]:
-        video = (
-            gr.HTML(visible=False)
-            if not upload or code not in vtt or str(upload).endswith((".srt", ".vtt"))
-            else gr.HTML(value=player_html(upload, vtt, code), visible=True)
-        )
-        audio = (
-            gr.Audio(value=wavs[code], visible=True) if code in wavs else gr.Audio(visible=False)
-        )
-        return video, audio
+    def on_language_audio(wavs: dict[str, str], code: str) -> Any:
+        """Only the voice follows the language here; the browser switches the subtitles itself."""
+
+        if code in wavs:
+            return gr.Audio(value=wavs[code], visible=True)
+        return gr.Audio(visible=False)
 
     with gr.Blocks(title="LessonLingo") as app:
         gr.HTML(HERO_HTML, padding=False)
@@ -636,7 +652,7 @@ def build_app(
                 v_state = gr.State({})
                 v_wavs = gr.State({})
                 v_lang = gr.Dropdown(label="Watch with subtitles in", choices=[], visible=False)
-                v_player = gr.HTML(visible=False, padding=False)
+                v_player = gr.HTML(visible=False, padding=False, elem_id="lecture-player")
                 v_audio = gr.Audio(label="Hear the translation", visible=False)
                 v_files = gr.File(
                     label="Download subtitles (.srt, .vtt) and the class pack (.zip)",
@@ -652,8 +668,9 @@ def build_app(
                     on_translate_video,
                     [v_upload, v_heard, v_table, v_targets, v_mode, v_keep, v_sheet, v_dub],
                     [v_status, v_files, v_state, v_lang, v_player, v_wavs, v_audio],
-                )
-                v_lang.change(on_language, [v_upload, v_state, v_wavs, v_lang], [v_player, v_audio])
+                ).then(None, v_lang, None, js=SWITCH_TRACK_JS)
+                v_lang.change(on_language_audio, [v_wavs, v_lang], v_audio)
+                v_lang.change(None, v_lang, None, js=SWITCH_TRACK_JS)
 
             with gr.Tab("My courses", id="courses"):
                 library = build_library_tab(
