@@ -185,3 +185,36 @@ def test_glossary_file_and_zip_flags(tmp_path: Path) -> None:
 
     assert "बल" in (tmp_path / "o" / "unit.hin_Deva.md").read_text(encoding="utf-8")
     assert "START_HERE.txt" in zipfile.ZipFile(tmp_path / "o" / "unit.classpack.zip").namelist()
+
+
+def test_course_commands_create_add_translate_and_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from lessonlingo.video import FakeTranscriber
+
+    home = ["--workspace", str(tmp_path / "home")]
+    note = tmp_path / "unit.md"
+    note.write_text("Plants need light.", encoding="utf-8")
+    talk = tmp_path / "talk.srt"
+    talk.write_text("1\n00:00:00,000 --> 00:00:02,000\nHello class.\n", encoding="utf-8")
+
+    assert cli.main(["course", "new", "Science", "--to", "hin_Deva", *home]) == 0
+    assert cli.main(["course", "add", "Science", str(note), str(talk), *home]) == 0
+    assert cli.main(["course", "list", *home]) == 0
+    assert cli.main(["course", "status", "Science", *home]) == 0
+    before = capsys.readouterr().out
+    assert "Science" in before and "unit.md\tlesson\tnot yet" in before
+
+    code = cli.main(["course", "translate", "Science", *home], FakeTranslator(), FakeTranscriber)
+
+    assert code == 0 and "Done." in capsys.readouterr().out
+    cli.main(["course", "status", "Science", *home])
+    assert "unit.md\tlesson\tHindi" in capsys.readouterr().out
+    out = tmp_path / "home" / "Science" / "outputs"
+    assert (out / "unit" / "unit.hin_Deva.md").is_file()
+    assert (out / "Science.classpack.zip").is_file()
+
+
+def test_course_command_rejects_unsafe_names(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        cli.main(["course", "new", "../evil", "--workspace", str(tmp_path)])

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from lessonlingo.glossary import GlossaryTranslator, load_glossary
@@ -13,6 +13,8 @@ from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_file, translate_folder
 from lessonlingo.setup_models import enable_offline_mode, run_setup, run_verify
 from lessonlingo.translator import IndicTransTranslator, Translator
+from lessonlingo.video import FasterWhisperTranscriber, Transcriber
+from lessonlingo.workspace import DEFAULT_TARGETS, Workspace
 
 OFFLINE_HELP = (
     "never contact the internet (also set by LESSONLINGO_OFFLINE=1); "
@@ -135,6 +137,50 @@ def build_parser() -> argparse.ArgumentParser:
         help="use a specific Hugging Face cache directory",
     )
 
+    course_parser = subparsers.add_parser(
+        "course",
+        help="keep lectures and lessons in course folders and translate them all together",
+    )
+    course_commands = course_parser.add_subparsers(dest="course_command", required=True)
+
+    def workspace_option(parser: argparse.ArgumentParser) -> None:
+        parser.add_argument(
+            "--workspace",
+            type=Path,
+            help="folder that holds your courses (default: ~/LessonLingo or $LESSONLINGO_HOME)",
+        )
+
+    course_new = course_commands.add_parser("new", help="create a course")
+    course_new.add_argument("name")
+    course_new.add_argument(
+        "--to", nargs="+", default=DEFAULT_TARGETS, choices=SUPPORTED_LANGUAGES, metavar="LANG"
+    )
+    course_new.add_argument("--mode", choices=("quality", "light"), default="light")
+    workspace_option(course_new)
+
+    course_list = course_commands.add_parser("list", help="list your courses")
+    workspace_option(course_list)
+
+    course_add = course_commands.add_parser("add", help="add videos, audio, .srt files or lessons")
+    course_add.add_argument("name")
+    course_add.add_argument("files", nargs="+", type=Path)
+    workspace_option(course_add)
+
+    course_status = course_commands.add_parser("status", help="show each file and its languages")
+    course_status.add_argument("name")
+    workspace_option(course_status)
+
+    course_translate = course_commands.add_parser(
+        "translate", help="translate every pending file in the course"
+    )
+    course_translate.add_argument("name")
+    course_translate.add_argument(
+        "--force", action="store_true", help="translate finished files again"
+    )
+    course_translate.add_argument("--whisper-device", help="cuda or cpu for speech recognition")
+    course_translate.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
+    workspace_option(course_translate)
+
     subparsers.add_parser("languages", help="list supported target language codes")
     return parser
 
@@ -225,17 +271,67 @@ def _run_video(args: argparse.Namespace, translator: Translator | None) -> int:
     return 0
 
 
+def _run_course(
+    args: argparse.Namespace,
+    translator: Translator | None,
+    transcriber_factory: Callable[..., Transcriber],
+) -> int:
+    from lessonlingo.app import default_workspace_root
+
+    home = Workspace(args.workspace or default_workspace_root())
+    command = args.course_command
+    if command == "new":
+        print(home.create_course(args.name, args.to, args.mode))
+    elif command == "list":
+        for name in home.list_courses():
+            print(name)
+    elif command == "add":
+        for file in args.files:
+            print(home.add_file(args.name, file))
+    elif command == "status":
+        for item in home.list_items(args.name):
+            done = ", ".join(SUPPORTED_LANGUAGES[c] for c in item.done) or "not yet"
+            print(f"{item.name}\t{item.kind}\t{done}")
+    else:
+        mode = home.settings(args.name)["mode"]
+        backend = translator or IndicTransTranslator(mode)  # type: ignore[arg-type]
+        try:
+            written = home.translate_course(
+                args.name,
+                backend,
+                lambda **kwargs: transcriber_factory(
+                    **kwargs, **({"device": args.whisper_device} if args.whisper_device else {})
+                ),
+                status=print,
+                force=args.force,
+            )
+        finally:
+            if translator is None:
+                backend.close()
+        print(f"Done. {len(written)} file(s) written.")
+        pack = home.course_pack(args.name)
+        if pack:
+            print(pack)
+    return 0
+
+
 def main(
     argv: Sequence[str] | None = None,
     translator: Translator | None = None,
+    transcriber_factory: Callable[..., Transcriber] = FasterWhisperTranscriber,
 ) -> int:
-    """Run LessonLingo, optionally injecting a fake translator for tests."""
+    """Run LessonLingo, optionally injecting fake backends for tests."""
 
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        if args.command in {"translate", "app", "video"} and _offline_requested(args.offline):
+        wants_offline = args.command in {"translate", "app", "video"} or (
+            args.command == "course" and args.course_command == "translate"
+        )
+        if wants_offline and _offline_requested(args.offline):
             enable_offline_mode()
+        if args.command == "course":
+            return _run_course(args, translator, transcriber_factory)
         if args.command == "app":
             from lessonlingo.app import launch
 
