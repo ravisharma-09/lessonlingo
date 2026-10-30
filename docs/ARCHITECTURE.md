@@ -13,7 +13,8 @@ flowchart LR
     B -- no --> C[ffmpeg: 16 kHz mono WAV]
     C --> D[faster-whisper: English cues with timestamps]
     D --> E[Free the speech model]
-    E --> F
+    E --> T[Teacher fixes the English transcript, doubtful lines marked]
+    T --> F
     F --> G[GlossaryTranslator: protect kept words]
     G --> H[IndicTrans2: translate each cue, per language]
     H --> I[Restore kept words]
@@ -24,7 +25,7 @@ flowchart LR
 
 Rules that shape the flow:
 - The speech model is freed before IndicTrans2 loads, so they never share the GPU.
-- Timestamps never change. Only the text of each cue is replaced.
+- Timestamps never change. Doubtful lines (low recognition score) are marked for the teacher. Only the text of each cue is replaced.
 - An uploaded `.srt` skips speech recognition. This is the demo fallback.
 
 ## Data flow: text lesson
@@ -46,11 +47,12 @@ flowchart LR
 | Module | Public interface | Notes |
 | --- | --- | --- |
 | `translator.py` | `Translator.translate(sentences, tgt_lang)`, `close()`; `FakeTranslator`, `IndicTransTranslator(mode, device, batch_size)` | Lazy model load. Quality = 1B on GPU, light = 200M. |
-| `glossary.py` | `GlossaryTranslator(inner, terms)`, `parse_terms(text)` | Wraps any translator. Re-translates a sentence if a placeholder is lost. |
+| `glossary.py` | `GlossaryTranslator(inner, terms, preferred)`, `parse_terms`, `load_glossary` | Wraps any translator. Re-translates a sentence if a placeholder is lost. |
 | `markdown_io.py` | `split_markdown(text) -> list[Segment]`, `rebuild(segments, translations)` | Round trip is exact for protected parts. |
 | `pipeline.py` | `translate_segments`, `translate_text`, `translate_file`, `translate_folder` | Caches identical sentences within a run. |
 | `subtitles.py` | `Cue`, `parse_subtitles`, `load_subtitles`, `to_srt`, `to_vtt`, `with_text`, `wrap_text` | SRT and WebVTT. Wraps at 42 characters. |
 | `video.py` | `Transcriber`, `FakeTranscriber`, `FasterWhisperTranscriber`, `extract_audio`, `translate_video`, `embed_subtitles` | Status callback reports each stage. |
+| `pack.py` | `make_class_pack(files, zip_path)` | Zip with START_HERE.txt for sharing. |
 | `setup_models.py` | `run_setup`, `run_verify`, `enable_offline_mode` | Downloads IndicTrans2 1B and 200M plus the Whisper model. |
 | `app.py` | `build_app(holder, transcriber_factory)`, `run_translation`, `run_video_job`, `review_rows`, `save_review`, `ModelHolder` | Gradio UI. `ModelHolder` keeps one model and frees it on mode change. |
 | `cli.py` | `lessonlingo translate / video / app / setup / verify / languages` | `--offline`, `--keep`, `--mode`, `--whisper`. |

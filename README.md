@@ -177,6 +177,28 @@ that sentence is translated again without protection.
 The data flow, module interfaces and UI system are described in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+### Course glossary, transcript check and class pack
+
+- **Check the English first.** In the Lecture video tab, press Listen, fix any mistakes in the
+  English transcript (lines the speech model was unsure about are marked Check), then Translate.
+  Errors in the transcript would otherwise be translated too.
+- **Course glossary.** A CSV with a `term` column and one column per language code, for example:
+
+  ```csv
+  term,hin_Deva,kan_Knda
+  force,बल,
+  Python,,
+  ```
+
+  A filled cell is the exact word to use in that language. An empty cell keeps the term in
+  English. Use it with `--glossary course.csv` or the upload box. The terms are also given to the
+  speech model as hints so it hears technical words correctly.
+- **Class pack.** `--zip` (and the web UI) also writes a `.classpack.zip` with the subtitles or
+  lessons and a START_HERE.txt, easy to copy to a pen drive.
+- **Our own docs.** `scripts/translate_docs.ps1` translates this README and CONTRIBUTING into
+  Hindi and Kannada under `docs/i18n/`. A speaker should check them before they are committed.
+- **Pilot.** [docs/PILOT.md](docs/PILOT.md) explains how a fluent speaker rates 20 lines.
+
 ## Supported languages
 
 | Code | Language |
