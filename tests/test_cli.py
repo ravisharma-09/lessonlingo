@@ -146,3 +146,15 @@ def test_download_whisper_uses_public_repo_and_local_flag() -> None:
 
     assert calls[0]["repo_id"] == "Systran/faster-whisper-small"
     assert calls[0]["local_files_only"] is True
+
+
+def test_keep_flag_protects_terms_in_translation(tmp_path: Path) -> None:
+    lesson = tmp_path / "a.md"
+    lesson.write_text("Learn Python today.", encoding="utf-8")
+
+    cli.main(
+        ["translate", str(lesson), "--to", "hin_Deva", "--keep", "Python", "--out", str(tmp_path)],
+        FakeTranslator(),
+    )
+
+    assert "Python" in (tmp_path / "a.hin_Deva.md").read_text(encoding="utf-8")

@@ -7,6 +7,7 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
+from lessonlingo.glossary import GlossaryTranslator
 from lessonlingo.languages import SUPPORTED_LANGUAGES
 from lessonlingo.pipeline import translate_file
 from lessonlingo.setup_models import enable_offline_mode, run_setup, run_verify
@@ -16,6 +17,9 @@ OFFLINE_HELP = (
     "never contact the internet (also set by LESSONLINGO_OFFLINE=1); "
     "models must already be downloaded by `lessonlingo setup`"
 )
+
+
+KEEP_HELP = "words to keep in English, for example --keep photosynthesis Python"
 
 
 def _offline_requested(flag: bool) -> bool:
@@ -57,6 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="output directory (default: outputs)",
     )
     translate_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
+    translate_parser.add_argument("--keep", nargs="+", default=[], metavar="TERM", help=KEEP_HELP)
     translate_parser.add_argument("--device", help="override automatic cuda/cpu selection")
     translate_parser.add_argument("--batch-size", type=int, help="override the mode batch size")
 
@@ -75,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     video_parser.add_argument("--whisper-device", help="cuda or cpu for speech recognition")
     video_parser.add_argument("--out", type=Path, default=Path("outputs"))
     video_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
+    video_parser.add_argument("--keep", nargs="+", default=[], metavar="TERM", help=KEEP_HELP)
 
     app_parser = subparsers.add_parser("app", help="open the web interface on this computer")
     app_parser.add_argument("--port", type=int, default=7860, help="port (default: 7860)")
@@ -109,11 +115,12 @@ def _progress(completed: int, total: int, target: str) -> None:
 
 
 def _run_translate(args: argparse.Namespace, translator: Translator | None) -> int:
-    backend = translator or IndicTransTranslator(
+    inner = translator or IndicTransTranslator(
         args.mode,
         device=args.device,
         batch_size=args.batch_size,
     )
+    backend = GlossaryTranslator(inner, args.keep) if args.keep else inner
     owns_backend = translator is None
     try:
         paths = translate_file(
@@ -136,15 +143,21 @@ def _run_translate(args: argparse.Namespace, translator: Translator | None) -> i
 def _run_video(args: argparse.Namespace, translator: Translator | None) -> int:
     from lessonlingo.video import FasterWhisperTranscriber, translate_video
 
-    paths = translate_video(
-        args.file,
-        args.to,
-        args.mode,
-        args.out,
-        transcriber=FasterWhisperTranscriber(args.whisper, args.whisper_device),
-        translator=translator,
-        status=print,
-    )
+    inner = translator or IndicTransTranslator(args.mode)
+    backend = GlossaryTranslator(inner, args.keep) if args.keep else inner
+    try:
+        paths = translate_video(
+            args.file,
+            args.to,
+            args.mode,
+            args.out,
+            transcriber=FasterWhisperTranscriber(args.whisper, args.whisper_device),
+            translator=backend,
+            status=print,
+        )
+    finally:
+        if translator is None:
+            backend.close()
     for output_path in paths:
         print(output_path)
     return 0
