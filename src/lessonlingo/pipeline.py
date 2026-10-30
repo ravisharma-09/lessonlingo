@@ -6,18 +6,21 @@ from collections.abc import Callable
 from pathlib import Path
 
 from lessonlingo.languages import validate_targets
-from lessonlingo.markdown_io import rebuild, split_markdown
+from lessonlingo.markdown_io import Segment, rebuild, split_markdown
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
 
 ProgressCallback = Callable[[int, int, str], None]
 
 
-def _translate_for_target(
+def translate_segments(
     text: str,
     target: str,
     translator: Translator,
-    cache: dict[tuple[str, str], str],
-) -> str:
+    cache: dict[tuple[str, str], str] | None = None,
+) -> tuple[list[Segment], list[str]]:
+    """Translate one language; return the segments and one translation per translatable one."""
+
+    cache = {} if cache is None else cache
     segments = split_markdown(text)
     source_sentences = [segment.text for segment in segments if segment.translatable]
     missing = list(
@@ -30,7 +33,16 @@ def _translate_for_target(
         cache.update(
             ((target, sentence), output) for sentence, output in zip(missing, outputs, strict=True)
         )
-    translations = [cache[(target, sentence)] for sentence in source_sentences]
+    return segments, [cache[(target, sentence)] for sentence in source_sentences]
+
+
+def _translate_for_target(
+    text: str,
+    target: str,
+    translator: Translator,
+    cache: dict[tuple[str, str], str],
+) -> str:
+    segments, translations = translate_segments(text, target, translator, cache)
     return rebuild(segments, translations)
 
 
