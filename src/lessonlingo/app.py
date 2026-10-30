@@ -11,8 +11,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from lessonlingo.languages import SUPPORTED_LANGUAGES
-from lessonlingo.pipeline import translate_text
+from lessonlingo.glossary import GlossaryTranslator, parse_terms
+from lessonlingo.languages import SUPPORTED_LANGUAGES, validate_targets
+from lessonlingo.markdown_io import Segment, rebuild
+from lessonlingo.pipeline import translate_segments
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
 from lessonlingo.video import FasterWhisperTranscriber, Transcriber, translate_video
 
@@ -69,6 +71,9 @@ def read_source(text: str | None, upload_path: str | None) -> tuple[str, str]:
     raise ValueError("Paste a lesson or upload a .md or .txt file first.")
 
 
+ReviewDocs = dict[str, tuple[list[Segment], list[str]]]
+
+
 def run_translation(
     text: str | None,
     upload_path: str | None,
@@ -77,22 +82,53 @@ def run_translation(
     translator: Translator,
     out_dir: Path | None = None,
     progress_cb: Callable[[int, int, str], None] | None = None,
-) -> tuple[list[str], str]:
-    """Translate the lesson; return (written file paths, preview text)."""
+) -> tuple[list[str], str, ReviewDocs]:
+    """Translate the lesson; return (file paths, preview text, per-language review data)."""
 
     source, stem = read_source(text, upload_path)
-    results = translate_text(source, targets, mode, translator=translator, progress_cb=progress_cb)
+    selected = validate_targets(targets)
+    cache: dict[tuple[str, str], str] = {}
+    docs: ReviewDocs = {}
+    for done, code in enumerate(selected, start=1):
+        docs[code] = translate_segments(source, code, translator, cache)
+        if progress_cb is not None:
+            progress_cb(done, len(selected), code)
+
     folder = out_dir or Path(tempfile.mkdtemp(prefix="lessonlingo_"))
     folder.mkdir(parents=True, exist_ok=True)
-
     paths: list[str] = []
     preview: list[str] = []
-    for code, document in results.items():
+    for code, (segments, translations) in docs.items():
+        document = rebuild(segments, translations)
         path = folder / f"{stem}.{code}.md"
         path.write_text(document, encoding="utf-8")
         paths.append(str(path))
         preview.append(f"===== {SUPPORTED_LANGUAGES[code]} ({code}) =====\n{document}")
-    return paths, "\n\n".join(preview)
+    return paths, "\n\n".join(preview), docs
+
+
+def review_rows(segments: list[Segment], translations: list[str]) -> list[list[str]]:
+    """Rows of [English, translation], one per translated sentence, for the review table."""
+
+    sources = [segment.text for segment in segments if segment.translatable]
+    return [[source, target] for source, target in zip(sources, translations, strict=True)]
+
+
+def save_review(
+    segments: list[Segment],
+    rows: list[list[str]],
+    stem: str,
+    code: str,
+    out_dir: Path | None = None,
+) -> str:
+    """Rebuild the document from the (possibly edited) translation column and save it."""
+
+    document = rebuild(segments, [str(row[1]) for row in rows])
+    folder = out_dir or Path(tempfile.mkdtemp(prefix="lessonlingo_edit_"))
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{stem}.{code}.md"
+    path.write_text(document, encoding="utf-8")
+    return str(path)
 
 
 def run_video_job(
@@ -161,13 +197,18 @@ def build_app(
 
     models = holder or ModelHolder()
 
+    def with_glossary(translator: Translator, keep: str | None) -> Translator:
+        terms = parse_terms(keep)
+        return GlossaryTranslator(translator, terms) if terms else translator
+
     def on_translate(
         text: str,
         upload: str | None,
         targets: list[str],
         mode: Mode,
+        keep: str,
         progress: Any = None,
-    ) -> tuple[str, list[str], str]:
+    ) -> tuple[Any, ...]:
         if not targets:
             raise gr.Error("Pick at least one language.")
         progress = progress or gr.Progress()
@@ -177,17 +218,46 @@ def build_app(
 
         progress(0, desc="Loading the model (first run takes a little while)...")
         try:
-            paths, preview = run_translation(
-                text, upload, targets, mode, models.get(mode), progress_cb=report
+            paths, preview, docs = run_translation(
+                text,
+                upload,
+                targets,
+                mode,
+                with_glossary(models.get(mode), keep),
+                progress_cb=report,
             )
+            stem = read_source(text, upload)[1]
         except (ValueError, FileNotFoundError, RuntimeError) as error:
             raise gr.Error(str(error)) from error
-        return f"Done. {len(paths)} file(s) ready to download.", paths, preview
+        first = next(iter(docs))
+        review = {"stem": stem, "docs": docs}
+        return (
+            f"Done. {len(paths)} file(s) ready. Check each line below, fix any, then save.",
+            paths,
+            preview,
+            review,
+            gr.Dropdown(
+                choices=[(SUPPORTED_LANGUAGES[c], c) for c in docs], value=first, visible=True
+            ),
+            gr.Dataframe(value=review_rows(*docs[first]), visible=True),
+            gr.Button(visible=True),
+        )
+
+    def on_review_language(review: dict[str, Any], code: str) -> Any:
+        if not review or code not in review["docs"]:
+            return gr.Dataframe()
+        return gr.Dataframe(value=review_rows(*review["docs"][code]), visible=True)
+
+    def on_save_review(review: dict[str, Any], code: str, rows: Any) -> str:
+        if not review or code not in review["docs"]:
+            raise gr.Error("Translate a lesson first.")
+        table = rows.values.tolist() if hasattr(rows, "values") else rows
+        return save_review(review["docs"][code][0], table, review["stem"], code)
 
     language_choices = [(f"{name} ({code})", code) for code, name in SUPPORTED_LANGUAGES.items()]
 
     def on_video(
-        upload: str | None, targets: list[str], mode: Mode, progress: Any = None
+        upload: str | None, targets: list[str], mode: Mode, keep: str, progress: Any = None
     ) -> tuple[Any, ...]:
         if not targets:
             raise gr.Error("Pick at least one language.")
@@ -198,7 +268,7 @@ def build_app(
                 upload,
                 targets,
                 mode,
-                models.get(mode),
+                with_glossary(models.get(mode), keep),
                 transcriber_factory(),
                 status=lambda message: progress(None, desc=message),
             )
@@ -248,6 +318,10 @@ def build_app(
                 label="2. Pick languages", choices=language_choices, value=["kan_Knda", "hin_Deva"]
             )
             v_mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
+            v_keep = gr.Textbox(
+                label="Keep these words in English (optional, separated by commas)",
+                placeholder="photosynthesis, Python",
+            )
             v_go = gr.Button("Translate lecture", variant="primary", size="lg")
             v_status = gr.Markdown()
             v_state = gr.State({})
@@ -258,7 +332,7 @@ def build_app(
             )
             v_go.click(
                 on_video,
-                [v_upload, v_targets, v_mode],
+                [v_upload, v_targets, v_mode, v_keep],
                 [v_status, v_files, v_state, v_lang, v_player],
             )
             v_lang.change(on_language, [v_upload, v_state, v_lang], v_player)
@@ -280,11 +354,34 @@ def build_app(
                 label="2. Pick languages", choices=language_choices, value=["hin_Deva", "kan_Knda"]
             )
             mode = gr.Radio(label="3. How should it run?", choices=MODE_CHOICES, value="light")
+            keep = gr.Textbox(
+                label="Keep these words in English (optional, separated by commas)",
+                placeholder="photosynthesis, Python",
+            )
             go = gr.Button("Translate lesson", variant="primary", size="lg", elem_id="go")
             status = gr.Markdown()
             files = gr.File(label="Download one file per language", file_count="multiple")
+            review_state = gr.State({})
+            review_lang = gr.Dropdown(label="Review language", choices=[], visible=False)
+            review_table = gr.Dataframe(
+                headers=["English", "Translation (click a cell to edit)"],
+                datatype=["str", "str"],
+                static_columns=[0],
+                interactive=True,
+                wrap=True,
+                visible=False,
+                type="array",
+            )
+            save_btn = gr.Button("Save my edits", visible=False)
+            edited = gr.File(label="Your edited file")
             preview = gr.Textbox(label="Preview", lines=12, interactive=False)
-            go.click(on_translate, [text, upload, targets, mode], [status, files, preview])
+            go.click(
+                on_translate,
+                [text, upload, targets, mode, keep],
+                [status, files, preview, review_state, review_lang, review_table, save_btn],
+            )
+            review_lang.change(on_review_language, [review_state, review_lang], review_table)
+            save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
         gr.Markdown(NOTE)
     return app
 

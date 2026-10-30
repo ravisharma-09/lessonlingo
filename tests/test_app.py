@@ -8,7 +8,7 @@ from lessonlingo.translator import FakeTranslator
 
 
 def test_run_translation_writes_one_file_per_language(tmp_path: Path) -> None:
-    paths, preview = run_translation(
+    paths, preview, docs = run_translation(
         "# Hi\n\nHello world.", None, ["hin_Deva", "kan_Knda"], "light", FakeTranslator(), tmp_path
     )
 
@@ -97,3 +97,21 @@ def test_run_video_job_returns_vtt_per_language(tmp_path: Path) -> None:
     assert set(vtt) == {"kan_Knda", "hin_Deva"} and len(files) == 5
     with pytest.raises(ValueError):
         run_video_job(None, ["hin_Deva"], "light", FakeTranslator(), FakeTranscriber())
+
+
+def test_review_rows_and_save_round_trip(tmp_path: Path) -> None:
+    from lessonlingo.app import review_rows, save_review
+
+    _, _, docs = run_translation(
+        "# Hi\n\nHello world.", None, ["hin_Deva"], "light", FakeTranslator()
+    )
+    segments, translations = docs["hin_Deva"]
+
+    rows = review_rows(segments, translations)
+    assert rows[0][0] == "Hi" and rows[0][1] == "[hin_Deva] Hi"
+    rows[1][1] = "EDITED line"
+    saved = Path(save_review(segments, rows, "lesson", "hin_Deva", tmp_path)).read_text(
+        encoding="utf-8"
+    )
+
+    assert saved.startswith("# [hin_Deva] Hi") and "EDITED line" in saved
