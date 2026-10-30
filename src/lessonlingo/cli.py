@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import argparse
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
 from lessonlingo.languages import SUPPORTED_LANGUAGES
 from lessonlingo.pipeline import translate_file
-from lessonlingo.setup_models import run_setup, run_verify
+from lessonlingo.setup_models import enable_offline_mode, run_setup, run_verify
 from lessonlingo.translator import IndicTransTranslator, Translator
+
+OFFLINE_HELP = (
+    "never contact the internet (also set by LESSONLINGO_OFFLINE=1); "
+    "models must already be downloaded by `lessonlingo setup`"
+)
+
+
+def _offline_requested(flag: bool) -> bool:
+    return flag or os.environ.get("LESSONLINGO_OFFLINE") == "1"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -46,8 +56,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("outputs"),
         help="output directory (default: outputs)",
     )
+    translate_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
     translate_parser.add_argument("--device", help="override automatic cuda/cpu selection")
     translate_parser.add_argument("--batch-size", type=int, help="override the mode batch size")
+
+    app_parser = subparsers.add_parser("app", help="open the web interface on this computer")
+    app_parser.add_argument("--port", type=int, default=7860, help="port (default: 7860)")
+    app_parser.add_argument("--offline", action="store_true", help=OFFLINE_HELP)
 
     setup_parser = subparsers.add_parser(
         "setup",
@@ -111,6 +126,13 @@ def main(
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.command in {"translate", "app"} and _offline_requested(args.offline):
+            enable_offline_mode()
+        if args.command == "app":
+            from lessonlingo.app import launch
+
+            launch(port=args.port)
+            return 0
         if args.command == "translate":
             return _run_translate(args, translator)
         if args.command == "setup":
