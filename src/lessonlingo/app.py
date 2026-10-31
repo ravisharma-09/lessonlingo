@@ -53,8 +53,8 @@ DEFAULT_TEXT = (
 )
 
 MODE_CHOICES: list[tuple[str, str]] = [
-    ("Quick and light (works on any laptop)", "light"),
-    ("Best quality (needs an NVIDIA graphics card)", "quality"),
+    ("Fast: 200M model (any laptop)", "light"),
+    ("Best quality: 1B model (NVIDIA GPU)", "quality"),
 ]
 
 NOTE = (
@@ -147,7 +147,7 @@ def friendly_error(error: Exception) -> str:
     lowered = text.lower()
     if "out of memory" in lowered:
         return (
-            "The graphics card ran out of memory. Choose 'Quick and light', "
+            "The graphics card ran out of memory. Choose 'Fast: 200M model', "
             "close other programs, and try again."
         )
     if "gated" in lowered or "401" in lowered:
@@ -782,10 +782,13 @@ def build_app(
 
                         with gr.Column(scale=1, min_width=320):
                             v_targets = targets_box(["kan_Knda", "hin_Deva"])
+                            v_mode = gr.Radio(
+                                label="Translation model",
+                                choices=MODE_CHOICES,
+                                value="light",
+                                elem_classes="lang-chips",
+                            )
                             with gr.Accordion("Options", open=False):
-                                v_mode = gr.Radio(
-                                    label="How should it run?", choices=MODE_CHOICES, value="light"
-                                )
                                 v_keep = gr.Textbox(
                                     label="Keep these words in English (separated by commas)",
                                     placeholder="photosynthesis, Python",
@@ -904,12 +907,13 @@ def build_app(
                             )
                         with gr.Column(scale=1, min_width=320):
                             targets = targets_box(["hin_Deva", "kan_Knda"])
+                            mode = gr.Radio(
+                                label="Translation model",
+                                choices=MODE_CHOICES,
+                                value="light",
+                                elem_classes="lang-chips",
+                            )
                             with gr.Accordion("Options", open=False):
-                                mode = gr.Radio(
-                                    label="How should it run?",
-                                    choices=MODE_CHOICES,
-                                    value="light",
-                                )
                                 keep = gr.Textbox(
                                     label="Keep these words in English (separated by commas)",
                                     placeholder="photosynthesis, Python",

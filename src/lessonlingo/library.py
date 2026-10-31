@@ -173,7 +173,7 @@ def build_library_tab(
         remove = gr.Button("Remove file")
     with gr.Accordion("Course settings", open=False):
         targets = gr.CheckboxGroup(label="Languages", choices=language_choices, value=[])
-        mode = gr.Radio(label="How should it run?", choices=mode_choices, value="light")
+        mode = gr.Radio(label="Translation model", choices=mode_choices, value="light")
         sheet = gr.File(
             label="Course glossary (.csv: term, then the exact word per language)",
             file_types=[".csv"],
