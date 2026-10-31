@@ -65,36 +65,30 @@ download a model.
 
 ## UI system
 
-The interface is plain, bright and roomy. Beginners should know what to do in one look.
+The interface is one guided flow with one theme: a warm paper page, a dark left menu and one
+orange accent (`#c2410c`). Headings use Bricolage Grotesque and text uses Figtree. Beginners should
+know what to do in one look, and every option says in a few words what it is for.
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Ground | `#f6fbf7` | Page background |
-| Card | `#ffffff` with `#dcebe1` border, 20px radius | Each step |
-| Ink | `#12261b` | Text |
-| Green | `#16803c` | Primary buttons, selected state |
-| Mint | `#e8f7ed` | Selected chips, notes |
-| Mustard `#f5b524`, coral `#ea7b78`, blue `#8fb4e3`, red `#e2461f` | Halloween accents only: the colour strip, pixel pumpkin, ghost and bat |
-| Fonts | Figtree (text), Space Mono (small labels) | Base size 16 to 17px, buttons are whole words |
+| Page | `#f8f4f1` | Background |
+| Menu | `#1a1210` | Left step menu |
+| Accent | `#c2410c` (hi `#f97316`) | Buttons, selected tiles, the logo |
+| Ink | `#1a1412` | Text |
+| Border | `#ecdfd6` | Cards and tiles |
 
-Layout (one step on screen at a time):
-- **Lecture tab:** a step bar (Add, Check, Watch). Add: drop area, language tiles, folded Options
-  (run mode, kept words, glossary, dubbing), one big Continue button. Check: the English
-  transcript table with doubtful words marked, Back and Translate. Watch: language buttons above the
-  player, voice player, downloads, Translate another lecture.
-- **Lesson tab:** Add, then Review (editable translation table, save, downloads).
-- **Courses tab:** course picker, file adder, table, Translate everything.
-- One spacing system: 720px page, 22px between blocks, 10px between tiles, 56px controls. The styling
-  lives in `ui_assets.py`.
+Layout:
+- **Left menu:** 1 Add, 2 Languages, 3 Options, 4 Check text, 5 Result, then Courses. Later steps
+  unlock as the earlier ones finish, and every step can be revisited with Back or the menu.
+- **Add** chooses the input first (text, video, audio or subtitle file), so the rest of the flow
+  adapts: Check text is skipped for text, voice options appear only for media.
+- **Result** has the dubbed-video player with CC, Aa (subtitle style), Audio and fullscreen, a
+  ready-to-share download and all files; for text it is an editable review table.
+- Every slow step shows one loader (spinner, timer, expected time, Cancel). Errors are shown as
+  plain messages before the slow part starts.
+- The styling lives in `ui_assets.py` and is written to work on Gradio 6.17.3 and newer.
 
-Component rules:
-- Three steps in order: add the lecture, pick languages, choose how it runs. One big green button.
-- Chips for languages (name plus native script), two big cards for the mode.
-- A review table before export, with English on the left and the editable translation on the right.
-- Always show the note: set up once, then no internet needed, and ask a speaker to check.
-- Halloween touches are decoration only (pixel sprites on dark tiles and a colour strip). They never carry meaning.
-
-The Gradio app uses the same palette through `make_theme()` and `GREEN_CSS` in `app.py`. The
+The Gradio app uses the same palette through `make_theme()` and `STYLE_CSS` in `ui_assets.py`. The
 design canvas has the matching screens: Add a lecture, Check the subtitles, Watch with subtitles.
 
 ## Courses on disk

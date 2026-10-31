@@ -10,12 +10,16 @@ students who need local access to English-only educational material.
 
 ## Project status
 
-LessonLingo translates text lessons and English lecture videos. The video flow
-(`lessonlingo video`, or the Lecture tab in `lessonlingo app`) extracts audio
-with ffmpeg, transcribes it with faster-whisper, frees the speech model, then
-translates each subtitle with IndicTrans2 and writes `.srt` and `.vtt` files.
-The video flow is tested with fakes on the Mac and still needs a real run on the GPU laptop. Unit
-tests use a deterministic fake translator and never download model files.
+LessonLingo translates English text, lecture videos, audio and subtitle files into ten Indian
+languages, and speaks the result in Hindi and Kannada. The guided app (`lessonlingo app`) walks
+through Add, Languages, Options, Check text and Result; `lessonlingo video` does the same from the
+command line. For a lecture it extracts audio with ffmpeg, transcribes it with faster-whisper,
+frees the speech model, translates each subtitle with IndicTrans2 and writes `.srt` and `.vtt`
+files, and can add a dubbed voice and put everything into one video. Unit tests use deterministic
+fakes and never download model files; real model quality and speed are measured on the GPU laptop.
+
+A project page with the specs, setup guide and a recorded demo is in [`site/`](site/)
+(https://lessonlingo-site.vercel.app). The app itself runs on your own computer.
 
 ## What "offline" means
 
@@ -152,11 +156,23 @@ fails on CUDA, add `--whisper-device cpu`.
 lessonlingo app --offline
 ```
 
-Open http://127.0.0.1:7860. Paste a lesson or upload a `.md`/`.txt` file, pick
-languages, choose quick or best quality, and download one file per language.
+Open http://127.0.0.1:7860. The left menu has five steps and every step has Back and Next:
+
+1. **Add**: text, video, audio or a subtitle file ("Try the sample lecture" needs no file).
+2. **Languages**: tick the ones you need; Hindi and Kannada are marked "voice".
+3. **Options**: translation model (Fast 200M for any laptop, Best quality 1B needs an NVIDIA GPU),
+   what you get (subtitle files; a video with subtitles inside; a video with subtitles and dubbed
+   audio), the voice (natural or quick) and words to keep in English. A line under the voice
+   options gives the expected time.
+4. **Check text**: fix the English before it is translated (video, audio and subtitle input).
+5. **Result**: the player has **CC**, **Aa** (subtitle size, position, background, width), **Audio**
+   (original or a dubbed voice) and a fullscreen button; downloads and a ready-to-share video
+   are below. **Courses** is a separate page for whole folders.
+
+Slow steps show a loader with a timer and a **Cancel** button that really stops the work. The
+terminal prints timed lines (`speech recognised in 15.2s`) so a slow step can be seen.
 `--lan` lets phones and laptops on the same Wi-Fi or hotspot open the app, with no
-internet; use it only on a network you trust. The Lecture tab has a "No file? Try the sample lecture"
-button that needs no video file. `--warm light` (or `quality`) loads that model in the background so the first translation
+internet; use it only on a network you trust. `--warm light` (or `quality`) loads that model in the background so the first translation
 is fast. `--offline` (or `LESSONLINGO_OFFLINE=1`) blocks all Hugging Face network calls,
 so models must already be downloaded by `lessonlingo setup`.
 
@@ -169,8 +185,8 @@ python scripts/bench.py   # writes docs/benchmarks.md
 
 ### Review and keep-in-English
 
-In the web UI, the Lesson tab shows English and the translation side by side after
-translating. Click a translation cell to fix it, then press Save my edits to download the
+In the web UI, choosing Text shows English and the translation side by side on the Result page
+after translating. Click a translation cell to fix it, then press Save my edits to download the
 corrected file. Type words such as `photosynthesis, Python` in the keep-in-English box (or
 use `--keep photosynthesis Python` on the command line) to leave them untranslated. Kept
 words are swapped for placeholders during translation; if the model drops a placeholder,
@@ -207,11 +223,17 @@ course pack zip collects every translated file.
 
 ### Spoken dubbing in Hindi and Kannada (optional)
 
-`--dub` (or "Also speak it" in the Lecture tab's Options) speaks each translated subtitle line in
-Hindi or Kannada. In the app, step 3 gets a **Voice** switch (Original voice, Hindi, Kannada) that
-plays the chosen voice in step with the video. You also get one `.wav` and one
-`<name>.<language>.dubbed.mp4` (voice only) per language, plus `<name>.dubbed.mp4` with the
-original sound and every voice as extra tracks.
+`--dub` (or "Video with subtitles and dubbed audio" in the app's Options) speaks each translated
+subtitle line in Hindi or Kannada. In the app the preview plays the dubbed video itself and the
+**Audio** menu switches between the original sound and each voice, keeping the time and the
+subtitles. You also get one `.wav` and one `<name>.<language>.dubbed.mp4` (voice only) per
+language, plus `<name>.dubbed.mp4` with the original sound, every voice and every subtitle
+language as extra tracks (VLC and most players can switch them; browsers play only the first audio
+track, which is why the app plays the per-language videos).
+
+**How long it takes** (measured on the RTX 4070 laptop; the quick voice is an estimate):
+natural voice about 8 to 9 minutes for each minute of video; quick voice about 1 minute;
+subtitles about 20 seconds. Choose with "Voice quality" in the app or `--voice-engine parler|mms`.
 
 Two voice engines, chosen with `--voice-engine auto|parler|mms` (default `auto`):
 
@@ -239,14 +261,14 @@ python scripts/smoke_voice.py --engine both     # writes sample audio to outputs
 ```
 
 Only Hindi and Kannada are offered; other languages are skipped with a note. A spoken line that is
-longer than its subtitle slot is sped up by at most 1.3 times; after that the voice falls a little
-behind the picture, and the command prints how much. The voices are tested with a fake voice on the
-development machine only; real voice quality, speed and memory use must be checked on the GPU laptop.
+longer than its slot is trimmed of silence, may use the pause after its subtitle, is time-stretched
+(pitch kept, ffmpeg `atempo`) by at most 1.5 times and may start up to 0.3 s early; after that the
+voice falls a little behind the picture, and the command prints how much.
 
 ### Course glossary, transcript check and class pack
 
-- **Check the English first.** In the Lecture tab, press Continue, fix any mistakes in the
-  English transcript, then Translate. Lines the speech model was unsure about are marked Check, with
+- **Check the English first.** In the app, the Check text step shows the English transcript; fix
+  any mistakes there, then Translate. Lines the speech model was unsure about are marked Check, with
   the doubtful words named (for example `Check: flay, fart`). The word threshold (probability below
   0.5) is a starting guess; `scripts/show_scores.py` prints the numbers to tune it. When a whole
   course is translated in one go, each lecture with doubtful lines gets an `<name>.check.txt` list
@@ -371,6 +393,14 @@ The full script is in [docs/DEMO.md](docs/DEMO.md). Short version:
 - Speech recognition can mishear technical terms, so review subtitles before publishing.
 - Subtitles are added as selectable tracks (`--embed`), not burned into the picture.
 - Real model loading and generated-language quality are not verified on the Mac.
+- Speech recognition runs on the CPU by default (reliable on every machine, about 15 s for each
+  minute of audio). Set `LESSONLINGO_WHISPER_DEVICE=cuda` to use the GPU; if its libraries are
+  missing it falls back to the CPU.
+- The natural voice needs an NVIDIA GPU and takes minutes; Hindi and Kannada only. Meta MMS, the
+  quick voice, is non-commercial.
+- Only short lectures (about a minute) have been timed end to end. No accuracy rating or
+  classroom pilot has been run yet (a pilot sheet is in `docs/PILOT.md`).
+- The app is tested on Gradio 6.17.3 (pinned in `requirements.txt`).
 
 ## Measured end to end
 
