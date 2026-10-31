@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
@@ -88,6 +89,12 @@ class FakeTranscriber:
         """Release resources; the fake has none."""
 
 
+def _log(message: str) -> None:
+    """One timed line in the terminal, so a slow step can be seen and not guessed at."""
+
+    print(f"[lessonlingo {time.strftime('%H:%M:%S')}] {message}", flush=True)
+
+
 class FasterWhisperTranscriber:
     """English speech recognition with faster-whisper, loaded on first use."""
 
@@ -117,6 +124,8 @@ class FasterWhisperTranscriber:
 
         device = self.requested_device or self._detect_device()
         compute_type = "float16" if device == "cuda" else "int8"
+        _log(f"loading the speech model '{self.size}' on {device} ({compute_type})")
+        loading = time.monotonic()
         try:
             self._model = WhisperModel(self.size, device=device, compute_type=compute_type)
         except Exception:
@@ -125,6 +134,7 @@ class FasterWhisperTranscriber:
             device = "cpu"  # the GPU libraries are missing: fall back to the CPU
             self._model = WhisperModel(self.size, device=device, compute_type="int8")
         self.device = device
+        _log(f"speech model ready in {time.monotonic() - loading:.1f}s")
 
     @staticmethod
     def _detect_device() -> str:
@@ -259,10 +269,14 @@ def transcribe_lecture(
             wav = Path(work) / "audio.wav"
             if status:
                 status("Extracting audio")
+            started = time.monotonic()
             extract_audio(source, wav)
+            _log(f"audio extracted in {time.monotonic() - started:.1f}s")
             if status:
                 status("Listening to the lecture")
+            started = time.monotonic()
             cues = speech.transcribe(wav)
+            _log(f"speech recognised in {time.monotonic() - started:.1f}s ({len(cues)} lines)")
     finally:
         speech.close()
     if not cues:
