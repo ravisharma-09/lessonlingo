@@ -372,46 +372,52 @@ VOICE_WARNING = (
 )
 
 VOICE_JS = """(voice) => {
-  const root = document.querySelector('#lecture-player');
-  const video = root && root.querySelector('video');
-  if (!video) return;
-  const audios = () => Array.from(root.querySelectorAll('audio'));
-  const current = () => audios().find((a) => a.dataset.code === window.__voice);
-  const align = () => {
-    const a = current();
-    if (a && Math.abs(a.currentTime - video.currentTime) > 0.3) a.currentTime = video.currentTime;
-  };
-  const warn = () => {
-    const el = root.querySelector('.ll-warn');
-    if (el) el.hidden = false;
-  };
-  const start = () => {
-    const a = current();
-    if (a) { align(); a.play().catch(warn); }
-  };
-  if (!video.__voiceBound) {
-    video.__voiceBound = true;
-    video.addEventListener('play', start);
-    video.addEventListener('playing', start);
-    video.addEventListener('pause', () => audios().forEach((a) => a.pause()));
-    video.addEventListener('waiting', () => audios().forEach((a) => a.pause()));
-    video.addEventListener('seeked', align);
-    video.addEventListener('timeupdate', align);
-    video.addEventListener('ratechange', () => {
+  const run = (tries) => {
+    const root = document.querySelector('#lecture-player');
+    const video = root && root.querySelector('video');
+    if (!video) {
+      if (tries > 0) setTimeout(() => run(tries - 1), 200);
+      return;
+    }
+    const audios = () => Array.from(root.querySelectorAll('audio'));
+    const current = () => audios().find((a) => a.dataset.code === window.__voice);
+    const align = () => {
       const a = current();
-      if (a) a.playbackRate = video.playbackRate;
-    });
-  }
-  window.__voice = voice;
-  audios().forEach((a) => a.pause());
-  video.muted = voice !== 'original';
-  const a = current();
-  if (a) {
-    a.currentTime = video.currentTime;
-    a.playbackRate = video.playbackRate;
-    if (a.error) warn();
-    if (!video.paused) a.play().catch(warn);
-  }
+      if (a && Math.abs(a.currentTime - video.currentTime) > 0.3) a.currentTime = video.currentTime;
+    };
+    const warn = () => {
+      const el = root.querySelector('.ll-warn');
+      if (el) el.hidden = false;
+    };
+    const start = () => {
+      const a = current();
+      if (a) { align(); a.play().catch(warn); }
+    };
+    if (!video.__voiceBound) {
+      video.__voiceBound = true;
+      video.addEventListener('play', start);
+      video.addEventListener('playing', start);
+      video.addEventListener('pause', () => audios().forEach((a) => a.pause()));
+      video.addEventListener('waiting', () => audios().forEach((a) => a.pause()));
+      video.addEventListener('seeked', align);
+      video.addEventListener('timeupdate', align);
+      video.addEventListener('ratechange', () => {
+        const a = current();
+        if (a) a.playbackRate = video.playbackRate;
+      });
+    }
+    window.__voice = voice;
+    audios().forEach((a) => a.pause());
+    video.muted = voice !== 'original';
+    const a = current();
+    if (a) {
+      a.currentTime = video.currentTime;
+      a.playbackRate = video.playbackRate;
+      if (a.error) warn();
+      if (!video.paused) a.play().catch(warn);
+    }
+  };
+  run(15);
 }"""
 
 
@@ -448,7 +454,7 @@ def player_html(
         menus += _menu("audio", "Audio", "Audio track", audio_items)
     return (
         '<div class="ll-player">'
-        f'<video controls preload="metadata" src="{_file_url(video)}" '
+        f'<video controls playsinline preload="auto" src="{_file_url(video)}" '
         f'style="width:100%;border-radius:14px;background:#000;display:block">{tracks}</video>'
         f'<div class="ll-menus">{menus}</div>{voice_tags}'
         f'<p class="ll-warn" hidden>{VOICE_WARNING}</p></div>'
@@ -726,16 +732,18 @@ def build_app(
             help_text += " No voice was made. " + " ".join(voice_notes)
         elif voice_notes:
             help_text += " " + " ".join(voice_notes)
-        voice_choices = [
+        voice_options = [
             ("Original voice", "original"),
             *[(SUPPORTED_LANGUAGES[c], c) for c in wavs],
         ]
+        # Start with a dubbed voice on, in the subtitle language when it has one.
+        start_voice = first if first in wavs else next(iter(wavs), "original")
         return (
             gr.File(value=[*map(str, written), *map(str, spoken), str(pack)]),
             vtt,
             gr.Radio(choices=[(SUPPORTED_LANGUAGES[c], c) for c in vtt], value=first),
             gr.HTML(value=player),
-            gr.Radio(choices=voice_choices, value="original", visible=bool(wavs) and has_video),
+            gr.Radio(choices=voice_options, value=start_voice, visible=bool(wavs) and has_video),
             f"{help_text}",
             gr.Tabs(selected="result"),
             gr.Tab(interactive=True),
@@ -784,6 +792,16 @@ def build_app(
             if len(voiced) < len(targets):
                 names = " and ".join(SUPPORTED_LANGUAGES[code] for code in voiced)
                 gr.Warning(f"Voice will be made for {names} only. Other languages get subtitles.")
+
+    def voice_note(kind: str, targets: list[str], want: str) -> str:
+        """Say which of the chosen languages will get a voice."""
+
+        if kind == "text" or want not in ("voice", "dub"):
+            return ""
+        voiced = [SUPPORTED_LANGUAGES[code] for code in targets if code in VOICE_LANGUAGES]
+        if voiced:
+            return f"Voice will be made in: **{', '.join(voiced)}**."
+        return "No voice yet. Tick Hindi or Kannada on Languages."
 
     def page_head(title: str, why: str = "") -> None:
         gr.Markdown(f"## {title}\n{why}" if why else f"## {title}", elem_classes="page-head")
@@ -900,6 +918,7 @@ def build_app(
                         value="subs",
                         elem_classes="lang-chips",
                     )
+                    want_note = gr.Markdown(elem_classes="hint")
                     with gr.Accordion("Keep words in English", open=False):
                         keep = gr.Textbox(
                             show_label=False,
@@ -994,6 +1013,8 @@ def build_app(
                     )
 
         top = SCROLL_TOP_JS
+        for trigger in (kind.change, targets.change, want.change):
+            trigger(voice_note, [kind, targets, want], want_note)
         kind.change(on_kind, kind, [text_col, file_col, v_upload, want, v_listen, go])
         add_next.click(check_add, [kind, text, upload, v_upload], tabs).then(
             None, None, None, js=top
