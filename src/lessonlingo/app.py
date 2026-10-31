@@ -27,12 +27,7 @@ from lessonlingo.pipeline import translate_segments
 from lessonlingo.subtitles import Cue, format_timestamp
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
 from lessonlingo.tts import Synthesizer, dub_subtitles, make_synthesizer
-from lessonlingo.ui_assets import (
-    HERO_HTML,
-    LESSON_STEPS,
-    SCROLL_TOP_JS,
-    stepper_html,
-)
+from lessonlingo.ui_assets import HERO_HTML, SCROLL_TOP_JS, THEME_JS
 from lessonlingo.ui_assets import STYLE_CSS as GREEN_CSS
 from lessonlingo.video import (
     FasterWhisperTranscriber,
@@ -72,15 +67,6 @@ def new_output_folder(prefix: str) -> Path:
 
     APP_TEMP.mkdir(parents=True, exist_ok=True)
     return Path(tempfile.mkdtemp(prefix=prefix, dir=APP_TEMP))
-
-
-FORCE_LIGHT_JS = """() => {
-  const url = new URL(window.location);
-  if (url.searchParams.get('__theme') !== 'light') {
-    url.searchParams.set('__theme', 'light');
-    window.location.href = url.href;
-  }
-}"""
 
 
 def make_theme() -> Any:
@@ -575,18 +561,12 @@ def build_app(
             review,
             gr.Radio(choices=[(SUPPORTED_LANGUAGES[c], c) for c in docs], value=first),
             gr.Dataframe(value=review_rows(*docs[first])),
-            gr.Column(visible=False),
-            gr.Column(visible=True),
-            stepper_html(2, LESSON_STEPS),
+            gr.Tabs(selected="les_review"),
+            gr.Tab(interactive=True),
         )
 
     def on_lesson_again() -> tuple[Any, ...]:
-        return (
-            gr.Column(visible=True),
-            gr.Column(visible=False),
-            stepper_html(1, LESSON_STEPS),
-            gr.File(visible=False),
-        )
+        return gr.Tabs(selected="les_add"), gr.File(visible=False)
 
     def on_review_language(review: dict[str, Any], code: str) -> Any:
         if not review or code not in review["docs"]:
@@ -628,13 +608,9 @@ def build_app(
             note,
             {"cues": cues},
             gr.Dataframe(value=transcript_rows(cues)),
-            gr.Column(visible=False),
-            gr.Column(visible=True),
-            stepper_html(2),
+            gr.Tabs(selected="lec_check"),
+            gr.Tab(interactive=True),
         )
-
-    def on_back_to_add() -> tuple[Any, ...]:
-        return gr.Column(visible=True), gr.Column(visible=False), stepper_html(1)
 
     def on_translate_video(
         upload: str | None,
@@ -722,10 +698,9 @@ def build_app(
             gr.Radio(choices=[(SUPPORTED_LANGUAGES[c], c) for c in vtt], value=first),
             gr.HTML(value=player),
             gr.Radio(choices=voice_choices, value="original", visible=bool(wavs) and has_video),
-            f"### Your lecture is ready\n{help_text}",
-            gr.Column(visible=False),
-            gr.Column(visible=True),
-            stepper_html(3),
+            f"{help_text}",
+            gr.Tabs(selected="lec_watch"),
+            gr.Tab(interactive=True),
         )
 
     def on_new_lecture() -> tuple[Any, ...]:
@@ -734,31 +709,70 @@ def build_app(
             {},
             {},
             gr.HTML(value=""),
-            gr.Column(visible=True),
-            gr.Column(visible=False),
-            gr.Column(visible=False),
-            stepper_html(1),
+            gr.Tabs(selected="lec_add"),
+            gr.Tab(interactive=False),
+            gr.Tab(interactive=False),
         )
 
+    def page_head(title: str, why: str) -> None:
+        gr.Markdown(f"## {title}\n{why}", elem_classes="page-head")
+
+    def go_to(tab_id: str) -> Any:
+        return gr.Tabs(selected=tab_id)
+
     def targets_box(default: list[str]) -> Any:
-        gr.Markdown("### Translate into", elem_classes="step")
-        return gr.CheckboxGroup(show_label=False, choices=language_choices, value=default)
+        return gr.CheckboxGroup(
+            label="Languages to translate into",
+            info="Tick every language you need. Each one gets its own subtitle file.",
+            choices=language_choices,
+            value=default,
+        )
+
+    def model_box() -> Any:
+        return gr.Radio(
+            label="Translation model",
+            info=(
+                "Fast (200M) is quick and runs on any laptop. Best quality (1B) writes clearer "
+                "sentences but needs an NVIDIA graphics card. You can change this any time."
+            ),
+            choices=MODE_CHOICES,
+            value="light",
+            elem_classes="lang-chips",
+        )
+
+    def keep_box() -> Any:
+        return gr.Textbox(
+            label="Keep these words in English",
+            info=(
+                "Words that must not be translated, like photosynthesis or Python. "
+                "Separate with commas."
+            ),
+            placeholder="photosynthesis, Python",
+        )
+
+    def glossary_box() -> Any:
+        return gr.File(
+            label="Course glossary (optional)",
+            file_types=[".csv"],
+            type="filepath",
+            height=110,
+        )
 
     with gr.Blocks(title="LessonLingo") as app:
         gr.HTML(HERO_HTML, padding=False)
-        with gr.Tabs() as tabs:
-            with gr.Tab("Lecture", id="lecture"):
-                v_steps = gr.HTML(stepper_html(1), padding=False)
-                with gr.Column(elem_classes="step-body") as lec_add:
+        with gr.Tabs(elem_id="shell") as tabs:
+            with gr.Tab("Lecture · 1 Add", id="lec_add"):
+                with gr.Column(elem_classes="page"):
+                    page_head(
+                        "Add your lecture",
+                        "Start here. Give LessonLingo the English lecture you want to translate. "
+                        "Nothing is uploaded to the internet.",
+                    )
                     with gr.Row(elem_classes="split"):
-                        with gr.Column(scale=1, min_width=320):
-                            gr.Markdown(
-                                "### Add your lecture\nA video, audio or `.srt` file in English.",
-                                elem_classes="step",
-                            )
+                        with gr.Column(scale=3, min_width=320):
                             v_upload = gr.File(
-                                show_label=False,
-                                height=170,
+                                label="Lecture file",
+                                height=220,
                                 file_types=[
                                     ".mp4",
                                     ".mkv",
@@ -779,36 +793,56 @@ def build_app(
                                     elem_classes="link-button",
                                 )
                                 v_sample.click(lambda: str(SAMPLE_LECTURE), None, v_upload)
-
-                        with gr.Column(scale=1, min_width=320):
-                            v_targets = targets_box(["kan_Knda", "hin_Deva"])
-                            v_mode = gr.Radio(
-                                label="Translation model",
-                                choices=MODE_CHOICES,
-                                value="light",
-                                elem_classes="lang-chips",
+                        with gr.Column(scale=2, min_width=300, elem_classes="side-card"):
+                            gr.Markdown(
+                                "### What happens next\n"
+                                "1. **Choose** the languages and the model.\n"
+                                "2. **Check the text.** LessonLingo writes the English; "
+                                "you fix any mistake.\n"
+                                "3. **Translate.** You get subtitles, and a Hindi or Kannada voice "
+                                "if you ask for it.\n"
+                                "4. **Watch and download** everything, ready to share."
                             )
-                            with gr.Accordion("Options", open=False):
-                                v_keep = gr.Textbox(
-                                    label="Keep these words in English (separated by commas)",
-                                    placeholder="photosynthesis, Python",
-                                )
-                                v_sheet = gr.File(
-                                    label="Course glossary (.csv, see the README)",
-                                    file_types=[".csv"],
-                                    type="filepath",
-                                )
-                                v_dub = gr.Checkbox(
-                                    label="Also speak it (Hindi and Kannada, needs voice setup)",
-                                    value=False,
-                                )
-                    with gr.Column(elem_classes="sticky-cta"):
-                        v_listen = gr.Button("Continue", variant="primary", size="lg")
-                with gr.Column(visible=False, elem_classes="step-body") as lec_check:
-                    gr.Markdown(
-                        "### Check what was heard\nFix any mistakes in the English before it is "
-                        "translated. Click a cell to edit.",
-                        elem_classes="step",
+                    with gr.Row(elem_classes="nav-bar"):
+                        v_to_settings = gr.Button(
+                            "Next: choose languages →", variant="primary", size="lg"
+                        )
+
+            with gr.Tab("Lecture · 2 Languages & model", id="lec_settings"):
+                with gr.Column(elem_classes="page"):
+                    page_head(
+                        "Languages and model",
+                        "Say what you want made. These choices are used when you press "
+                        "Listen and check the text.",
+                    )
+                    with gr.Row(elem_classes="split"):
+                        with gr.Column(scale=1, min_width=320, elem_classes="side-card"):
+                            v_targets = targets_box(["kan_Knda", "hin_Deva"])
+                        with gr.Column(scale=1, min_width=320, elem_classes="side-card"):
+                            v_mode = model_box()
+                            v_keep = keep_box()
+                            v_sheet = glossary_box()
+                            v_dub = gr.Checkbox(
+                                label="Also speak it in Hindi and Kannada",
+                                info=(
+                                    "Adds a spoken voice you can switch to in the player. Takes "
+                                    "a few minutes longer and needs the voice setup."
+                                ),
+                                value=False,
+                            )
+                    with gr.Row(elem_classes="nav-bar"):
+                        v_back_add = gr.Button("← Back", variant="secondary", size="lg")
+                        v_listen = gr.Button(
+                            "Listen and check the text →", variant="primary", size="lg"
+                        )
+
+            with gr.Tab("Lecture · 3 Check text", id="lec_check", interactive=False) as t_check:
+                with gr.Column(elem_classes="page"):
+                    page_head(
+                        "Check what was heard",
+                        "LessonLingo wrote down what the speaker said. Fix any mistake now, "
+                        "because it would be copied into every language. Click a cell to edit. "
+                        "Lines marked Check were unclear.",
                     )
                     v_note = gr.Markdown(elem_classes="hint")
                     v_table = gr.Dataframe(
@@ -820,23 +854,33 @@ def build_app(
                         wrap=True,
                         type="array",
                     )
-                    with gr.Row(elem_classes="row-buttons"):
-                        v_back = gr.Button("Back", variant="secondary")
-                        v_go = gr.Button("Translate", variant="primary")
-                with gr.Column(visible=False, elem_classes="step-body") as lec_watch:
-                    v_done = gr.Markdown("### Your lecture is ready", elem_classes="step")
+                    with gr.Row(elem_classes="nav-bar"):
+                        v_back_set = gr.Button("← Back to settings", variant="secondary", size="lg")
+                        v_go = gr.Button("Translate →", variant="primary", size="lg")
+
+            with gr.Tab(
+                "Lecture · 4 Watch & download", id="lec_watch", interactive=False
+            ) as t_watch:
+                with gr.Column(elem_classes="page"):
+                    page_head(
+                        "Watch and download",
+                        "Your lecture is ready.",
+                    )
+                    v_done = gr.Markdown(elem_classes="hint")
                     with gr.Row(elem_classes="split"):
                         with gr.Column(scale=3, min_width=320):
                             v_player = gr.HTML(padding=False, elem_id="lecture-player")
-                        with gr.Column(scale=2, min_width=300):
+                        with gr.Column(scale=2, min_width=300, elem_classes="side-card"):
                             v_lang = gr.Radio(
                                 label="Subtitles",
+                                info="Shown on the video. Same as the CC button.",
                                 choices=[],
                                 elem_classes="lang-chips",
                                 elem_id="lecture-lang",
                             )
                             v_voice = gr.Radio(
                                 label="Voice",
+                                info="Hear the lecture in this language, or use the Audio button.",
                                 choices=[("Original voice", "original")],
                                 value="original",
                                 elem_classes="lang-chips",
@@ -844,93 +888,60 @@ def build_app(
                                 visible=False,
                             )
                             v_files = gr.File(
-                                label="Download subtitles (.srt, .vtt), voices and the class pack",
+                                label="Downloads",
                                 file_count="multiple",
                             )
-                            v_again = gr.Button("Translate another lecture", variant="secondary")
-                v_heard = gr.State({})
-                v_state = gr.State({})
+                    with gr.Row(elem_classes="nav-bar"):
+                        v_back_check = gr.Button(
+                            "← Back to check text", variant="secondary", size="lg"
+                        )
+                        v_again = gr.Button(
+                            "Translate another lecture", variant="primary", size="lg"
+                        )
+            v_heard = gr.State({})
+            v_state = gr.State({})
 
-                v_listen.click(
-                    on_listen,
-                    [v_upload, v_keep, v_sheet],
-                    [v_note, v_heard, v_table, lec_add, lec_check, v_steps],
-                ).then(None, None, None, js=SCROLL_TOP_JS)
-                v_back.click(on_back_to_add, None, [lec_add, lec_check, v_steps]).then(
-                    None, None, None, js=SCROLL_TOP_JS
-                )
-                v_go.click(
-                    on_translate_video,
-                    [v_upload, v_heard, v_table, v_targets, v_mode, v_keep, v_sheet, v_dub],
-                    [
-                        v_files,
-                        v_state,
-                        v_lang,
-                        v_player,
-                        v_voice,
-                        v_done,
-                        lec_check,
-                        lec_watch,
-                        v_steps,
-                    ],
-                ).then(None, v_lang, None, js=SWITCH_TRACK_JS).then(
-                    None, v_voice, None, js=VOICE_JS
-                ).then(None, None, None, js=SCROLL_TOP_JS)
-                v_lang.change(None, v_lang, None, js=SWITCH_TRACK_JS)
-                v_voice.change(None, v_voice, None, js=VOICE_JS)
-                v_again.click(
-                    on_new_lecture,
-                    None,
-                    [v_upload, v_heard, v_state, v_player, lec_add, lec_check, lec_watch, v_steps],
-                ).then(None, None, None, js=SCROLL_TOP_JS)
-
-            with gr.Tab("Lesson", id="lesson"):
-                les_steps = gr.HTML(stepper_html(1, LESSON_STEPS), padding=False)
-                with gr.Column(elem_classes="step-body") as les_add:
+            with gr.Tab("Lesson · Add", id="les_add"):
+                with gr.Column(elem_classes="page"):
+                    page_head(
+                        "Translate a lesson",
+                        "Paste English text or upload a Markdown file. Headings, links and code "
+                        "stay exactly as they are; only the words change.",
+                    )
                     with gr.Row(elem_classes="split"):
                         with gr.Column(scale=1, min_width=320):
-                            gr.Markdown(
-                                "### Add your lesson\nPaste English text or upload a file.",
-                                elem_classes="step",
-                            )
                             text = gr.Textbox(
-                                show_label=False,
+                                label="Lesson text",
                                 value=DEFAULT_TEXT,
-                                lines=8,
+                                lines=10,
                                 placeholder="Paste English lesson text here",
                             )
                             upload = gr.File(
-                                label="or upload a file",
+                                label="or upload a file (.md, .txt)",
                                 height=130,
                                 file_types=[".md", ".markdown", ".txt"],
                                 type="filepath",
                             )
-                        with gr.Column(scale=1, min_width=320):
+                        with gr.Column(scale=1, min_width=320, elem_classes="side-card"):
                             targets = targets_box(["hin_Deva", "kan_Knda"])
-                            mode = gr.Radio(
-                                label="Translation model",
-                                choices=MODE_CHOICES,
-                                value="light",
-                                elem_classes="lang-chips",
-                            )
-                            with gr.Accordion("Options", open=False):
-                                keep = gr.Textbox(
-                                    label="Keep these words in English (separated by commas)",
-                                    placeholder="photosynthesis, Python",
-                                )
-                                sheet = gr.File(
-                                    label="Course glossary (.csv, see the README)",
-                                    file_types=[".csv"],
-                                    type="filepath",
-                                )
-                    with gr.Column(elem_classes="sticky-cta"):
-                        go = gr.Button("Translate lesson", variant="primary", size="lg")
-                with gr.Column(visible=False, elem_classes="step-body") as les_review:
-                    gr.Markdown(
-                        "### Your lesson is ready\nCheck each line, fix any, then save your edits.",
-                        elem_classes="step",
+                            mode = model_box()
+                            keep = keep_box()
+                            sheet = glossary_box()
+                    with gr.Row(elem_classes="nav-bar"):
+                        go = gr.Button("Translate lesson →", variant="primary", size="lg")
+
+            with gr.Tab("Lesson · Review", id="les_review", interactive=False) as t_les:
+                with gr.Column(elem_classes="page"):
+                    page_head(
+                        "Review your lesson",
+                        "Check each line, fix any, then save your edits.",
                     )
-                    review_lang = gr.Radio(show_label=False, choices=[], elem_classes="lang-chips")
+                    review_lang = gr.Radio(
+                        label="Language",
+                        info="Switch between the languages you translated into.",
+                        choices=[],
+                        elem_classes="lang-chips",
+                    )
                     review_table = gr.Dataframe(
                         headers=["English", "Translation"],
                         datatype=["str", "str"],
@@ -946,29 +957,18 @@ def build_app(
                         label="Download one file per language, and the class pack (.zip)",
                         file_count="multiple",
                     )
-                    again = gr.Button("Translate another lesson", variant="secondary")
-                review_state = gr.State({})
-                go.click(
-                    on_translate,
-                    [text, upload, targets, mode, keep, sheet],
-                    [
-                        files,
-                        review_state,
-                        review_lang,
-                        review_table,
-                        les_add,
-                        les_review,
-                        les_steps,
-                    ],
-                ).then(None, None, None, js=SCROLL_TOP_JS)
-                review_lang.change(on_review_language, [review_state, review_lang], review_table)
-                save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
-                again.click(on_lesson_again, None, [les_add, les_review, les_steps, edited]).then(
-                    None, None, None, js=SCROLL_TOP_JS
-                )
+                    with gr.Row(elem_classes="nav-bar"):
+                        les_back = gr.Button("← Back to lesson", variant="secondary", size="lg")
+                        again = gr.Button("Translate another lesson", variant="primary", size="lg")
+            review_state = gr.State({})
 
             with gr.Tab("Courses", id="courses"):
-                with gr.Column(elem_classes="step-body"):
+                with gr.Column(elem_classes="page"):
+                    page_head(
+                        "Courses",
+                        "Keep each class's lectures and lessons in one folder, then translate "
+                        "them all in one go.",
+                    )
                     library = build_library_tab(
                         gr,
                         courses_home,
@@ -978,22 +978,55 @@ def build_app(
                         language_choices,
                         MODE_CHOICES,
                     )
+
+        v_to_settings.click(lambda: go_to("lec_settings"), None, tabs).then(
+            None, None, None, js=SCROLL_TOP_JS
+        )
+        v_back_add.click(lambda: go_to("lec_add"), None, tabs)
+        v_back_set.click(lambda: go_to("lec_settings"), None, tabs)
+        v_back_check.click(lambda: go_to("lec_check"), None, tabs)
+        les_back.click(lambda: go_to("les_add"), None, tabs)
+        v_listen.click(
+            on_listen,
+            [v_upload, v_keep, v_sheet],
+            [v_note, v_heard, v_table, tabs, t_check],
+        ).then(None, None, None, js=SCROLL_TOP_JS)
+        v_go.click(
+            on_translate_video,
+            [v_upload, v_heard, v_table, v_targets, v_mode, v_keep, v_sheet, v_dub],
+            [v_files, v_state, v_lang, v_player, v_voice, v_done, tabs, t_watch],
+        ).then(None, v_lang, None, js=SWITCH_TRACK_JS).then(None, v_voice, None, js=VOICE_JS).then(
+            None, None, None, js=SCROLL_TOP_JS
+        )
+        v_lang.change(None, v_lang, None, js=SWITCH_TRACK_JS)
+        v_voice.change(None, v_voice, None, js=VOICE_JS)
+        v_again.click(
+            on_new_lecture,
+            None,
+            [v_upload, v_heard, v_state, v_player, tabs, t_check, t_watch],
+        ).then(None, None, None, js=SCROLL_TOP_JS)
+        go.click(
+            on_translate,
+            [text, upload, targets, mode, keep, sheet],
+            [files, review_state, review_lang, review_table, tabs, t_les],
+        ).then(None, None, None, js=SCROLL_TOP_JS)
+        review_lang.change(on_review_language, [review_state, review_lang], review_table)
+        save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
+        again.click(on_lesson_again, None, [tabs, edited]).then(None, None, None, js=SCROLL_TOP_JS)
         app.load(library.on_load, None, [library.course, *library.view])
         library.send.click(
             lambda course, name: (
                 (
                     str(courses_home.course_path(course) / "lectures" / name),
-                    gr.Tabs(selected="lecture"),
-                    gr.Column(visible=True),
-                    gr.Column(visible=False),
-                    gr.Column(visible=False),
-                    stepper_html(1),
+                    gr.Tabs(selected="lec_settings"),
+                    gr.Tab(interactive=False),
+                    gr.Tab(interactive=False),
                 )
                 if course and name
-                else (None, gr.Tabs(), gr.Column(), gr.Column(), gr.Column(), stepper_html(1))
+                else (None, gr.Tabs(), gr.Tab(), gr.Tab())
             ),
             [library.course, library.item],
-            [v_upload, tabs, lec_add, lec_check, lec_watch, v_steps],
+            [v_upload, tabs, t_check, t_watch],
         )
         gr.Markdown(NOTE, elem_classes="hint")
     return app
@@ -1037,7 +1070,7 @@ def launch(
         share=share,
         theme=make_theme(),
         css=GREEN_CSS,
-        js=FORCE_LIGHT_JS,
+        js=THEME_JS,
         allowed_paths=[str(courses_home.root), str(APP_TEMP)],
         footer_links=[],
     )

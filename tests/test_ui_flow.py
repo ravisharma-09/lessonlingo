@@ -2,20 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from lessonlingo.ui_assets import LESSON_STEPS, stepper_html
 
+def test_header_has_no_halloween_art_and_offers_colours_and_dark_mode() -> None:
+    from lessonlingo.ui_assets import HERO_HTML
 
-def test_stepper_marks_done_current_and_todo() -> None:
-    html = stepper_html(2)
-
-    assert html.count("<li") == 3
-    assert '<li class="done"><span class="dot">✓</span>' in html
-    assert '<li class="current"><span class="dot">2</span><span class="name">Check</span>' in html
-    assert '<li class="todo"><span class="dot">3</span>' in html
-
-
-def test_lesson_stepper_has_two_steps() -> None:
-    assert stepper_html(1, LESSON_STEPS).count("<li") == 2
+    assert "pumpkin" not in HERO_HTML.lower() and "<svg" not in HERO_HTML
+    assert HERO_HTML.count('class="sw"') == 5 and "llTheme('mode')" in HERO_HTML
 
 
 def test_whole_lecture_flow_through_the_real_app(tmp_path: Path) -> None:
