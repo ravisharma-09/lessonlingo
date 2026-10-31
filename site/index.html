@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LessonLingo: lectures in your language</title>
+<meta name="description" content="LessonLingo turns an English lecture into subtitles and a dubbed voice in Indian languages, on your own laptop with open models. Free and open source.">
+<meta name="theme-color" content="#f8f4f1">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Figtree:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1412; --ink-soft: #5c4f49; --paper: #f8f4f1; --surface: #ffffff;
+    --line: #ecdfd6; --brand: #c2410c; --brand-hi: #f97316; --brand-soft: #fbebe0;
+    --brand-deep: #7c2d12; --night: #1a1210; --night-text: #b8aca5;
+    --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+    --body: "Figtree", system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 84px; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body);
+    font-size: 18px; line-height: 1.55; }
+  a { color: var(--brand); }
+  img, svg, video { max-width: 100%; }
+  .wrap { width: min(1160px, 100% - 2rem); margin-inline: auto; }
+  h1, h2, h3 { font-family: var(--display); letter-spacing: -0.03em; line-height: 1.04; margin: 0; }
+  h1 { font-size: clamp(2.6rem, 6.4vw, 5rem); font-weight: 800; text-wrap: balance; }
+  h2 { font-size: clamp(2rem, 4.2vw, 3.1rem); font-weight: 800; text-wrap: balance; }
+  h3 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
+  p { margin: 0; }
+  .eyebrow { font-weight: 800; letter-spacing: 0.14em; font-size: 0.8rem; color: var(--brand);
+    text-transform: uppercase; }
+  .lead { font-size: 1.2rem; color: var(--ink-soft); max-width: 40rem; }
+  section { padding: 5rem 0 0; }
+
+  /* Top bar */
+  header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(10px); border-bottom: 1px solid transparent; }
+  .bar { display: flex; align-items: center; gap: 1.2rem; padding: 0.9rem 0; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; color: var(--ink);
+    font-family: var(--display); font-weight: 800; font-size: 1.4rem; letter-spacing: -0.02em; }
+  .brand span span { color: var(--brand); }
+  .brand svg { width: 42px; height: 36px; }
+  nav { margin-left: auto; display: flex; gap: 1.4rem; align-items: center; }
+  nav a.link { color: var(--ink); text-decoration: none; font-weight: 600; font-size: 0.98rem; }
+  nav a.link:hover { color: var(--brand); }
+  .btn { display: inline-flex; align-items: center; gap: 0.5rem; border-radius: 999px; padding: 0.8rem 1.5rem;
+    font-weight: 800; font-size: 1rem; text-decoration: none; border: 1px solid var(--line);
+    background: var(--surface); color: var(--ink); cursor: pointer; font-family: var(--body); }
+  .btn:hover { border-color: var(--brand); }
+  .btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .btn.primary:hover { background: var(--brand-deep); border-color: var(--brand-deep); }
+  .btn.small { padding: 0.5rem 1.1rem; font-size: 0.92rem; }
+
+  /* Hero */
+  .hero { padding-top: 3.5rem; display: grid; grid-template-columns: 1.05fr 1fr; gap: 3rem; align-items: center; }
+  .hero .actions { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-top: 2rem; }
+  .hero small { display: block; margin-top: 1.1rem; color: var(--ink-soft); font-size: 0.92rem; }
+  .hero h1 { margin: 0.8rem 0 1.2rem; }
+  .hero h1 em { font-style: normal; color: var(--brand); }
+
+  /* App window mock */
+  .window { background: var(--night); border-radius: 22px; padding: 14px; box-shadow: 0 30px 70px rgba(26,18,16,.22); }
+  .window .dots { display: flex; gap: 7px; padding: 4px 8px 12px; }
+  .window .dots i { width: 11px; height: 11px; border-radius: 50%; background: #3a302b; display: block; }
+  .window .body { display: grid; grid-template-columns: 150px 1fr; gap: 12px; }
+  .menu { display: flex; flex-direction: column; gap: 4px; padding: 6px; }
+  .menu span { color: var(--night-text); font-size: 0.82rem; font-weight: 600; padding: 9px 12px; border-radius: 999px; }
+  .menu span.on { background: var(--brand); color: #fff; font-weight: 800; }
+  .page { background: var(--paper); border-radius: 16px; padding: 18px; color: var(--ink); }
+  .page h4 { font-family: var(--display); font-size: 1.6rem; letter-spacing: -0.03em; margin: 0 0 10px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+  .tiles b { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 6px;
+    font-size: 0.72rem; text-align: center; font-weight: 600; }
+  .tiles b.on { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 800; }
+  .drop { border: 2px dashed var(--brand); background: var(--brand-soft); color: var(--brand-deep);
+    border-radius: 14px; text-align: center; padding: 22px 10px; font-size: 0.85rem; }
+  .next { margin: 12px 0 0 auto; width: fit-content; background: var(--brand); color: #fff; font-weight: 800;
+    font-size: 0.8rem; padding: 8px 22px; border-radius: 999px; }
+
+  /* Cards */
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; margin-top: 2.2rem; }
+  .card, .hero > *, .step > *, .window, .page, .panel { min-width: 0; }
+  td, th, p, h2, h3 { overflow-wrap: anywhere; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 1.7rem; }
+  .card p { color: var(--ink-soft); margin-top: 0.6rem; }
+  .card .tag { display: inline-block; background: var(--brand-soft); color: var(--brand-deep); font-weight: 800;
+    font-size: 0.78rem; padding: 0.25rem 0.7rem; border-radius: 999px; margin-bottom: 0.9rem; letter-spacing: 0.04em; }
+  .dark { background: var(--night); color: #f3ece8; border-color: var(--night); }
+  .dark p { color: var(--night-text); }
+  .dark .tag { background: #2a1d17; color: var(--brand-hi); }
+
+  /* Steps */
+  .steps { counter-reset: s; display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.9rem; margin-top: 2.2rem; }
+  .steps li { list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 1.2rem; }
+  .steps li::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 34px; height: 34px;
+    border-radius: 50%; background: var(--brand); color: #fff; font-weight: 800; margin-bottom: 0.7rem; }
+  .steps b { display: block; font-family: var(--display); font-size: 1.15rem; letter-spacing: -0.02em; }
+  .steps span { color: var(--ink-soft); font-size: 0.93rem; }
+  .pipeline { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.6rem; align-items: center; }
+  .pipeline span { background: var(--night); color: #fff; border-radius: 999px; padding: 0.55rem 1.1rem; font-weight: 600; font-size: 0.95rem; }
+  .pipeline i { color: var(--brand); font-style: normal; font-weight: 800; }
+
+  /* Specs */
+  .specs { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-top: 2.2rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.97rem; }
+  th, td { text-align: left; padding: 0.7rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { width: 38%; color: var(--ink-soft); font-weight: 600; padding-right: 1rem; }
+  tr:last-child th, tr:last-child td { border-bottom: 0; }
+  .note { font-size: 0.88rem; color: var(--ink-soft); margin-top: 0.9rem; }
+  .times td b { color: var(--brand); }
+
+  /* Setup */
+  .tabs { display: flex; gap: 0.5rem; margin-top: 2rem; }
+  .tabs button { border-radius: 999px; border: 1px solid var(--line); background: var(--surface); padding: 0.55rem 1.2rem;
+    font-weight: 800; font-family: var(--body); cursor: pointer; font-size: 0.95rem; color: var(--ink); }
+  .tabs button[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+  .setup { display: none; margin-top: 1.4rem; }
+  .setup.on { display: block; }
+  .step { display: grid; grid-template-columns: 44px 1fr; gap: 1rem; padding: 1.2rem 0; border-bottom: 1px solid var(--line); }
+  .step:last-child { border-bottom: 0; }
+  .step .n { width: 40px; height: 40px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-deep);
+    display: grid; place-items: center; font-weight: 800; }
+  .step p { color: var(--ink-soft); margin: 0.3rem 0 0.7rem; }
+  .code { position: relative; background: var(--night); color: #f3ece8; border-radius: 16px; padding: 0.95rem 4.6rem 0.95rem 1.1rem;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.88rem; overflow-x: auto; white-space: pre; margin-top: 0.5rem; }
+  .code button { position: absolute; top: 0.55rem; right: 0.55rem; border: 0; border-radius: 999px; padding: 0.3rem 0.8rem;
+    background: #2a1d17; color: var(--brand-hi); font-weight: 800; font-size: 0.78rem; cursor: pointer; font-family: var(--body); }
+  .code button:hover { background: var(--brand); color: #fff; }
+  .panel { margin-top: 1.6rem; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 0.4rem 1.6rem; }
+
+  /* Proof */
+  .proof { margin-top: 2rem; background: var(--night); border-radius: 26px; padding: 14px; }
+  .proof video { width: 100%; border-radius: 16px; display: block; background: #000; }
+  .slot { display: grid; place-items: center; text-align: center; min-height: 340px; color: var(--night-text); padding: 2rem; }
+  .slot b { display: block; font-family: var(--display); color: #fff; font-size: 1.7rem; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+  .slot svg { width: 64px; height: 64px; margin: 0 auto 1rem; display: block; }
+
+  /* Lists */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; margin-top: 2.2rem; }
+  .list { margin: 0.8rem 0 0; padding-left: 1.2rem; color: var(--ink-soft); }
+  .list li { margin: 0.4rem 0; }
+  .faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 1rem 1.3rem; margin-top: 0.8rem; }
+  .faq summary { font-weight: 800; cursor: pointer; font-size: 1.05rem; }
+  .faq p { color: var(--ink-soft); margin-top: 0.6rem; }
+  footer { margin-top: 5.5rem; background: var(--night); color: var(--night-text); padding: 3rem 0; }
+  footer .cols { display: flex; flex-wrap: wrap; gap: 2rem; justify-content: space-between; align-items: flex-start; }
+  footer a { color: #fff; }
+  footer b { color: #fff; font-family: var(--display); font-size: 1.4rem; letter-spacing: -0.02em; }
+  footer p { margin-top: 0.4rem; }
+
+  @media (max-width: 960px) {
+    .hero { grid-template-columns: minmax(0, 1fr); }
+    .grid3, .specs, .two { grid-template-columns: minmax(0, 1fr); }
+    .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    nav a.link { display: none; }
+  }
+  @media (max-width: 520px) {
+    body { font-size: 17px; }
+    .steps { grid-template-columns: minmax(0, 1fr); }
+    .window .body { grid-template-columns: minmax(0, 1fr); }
+    .menu { flex-direction: row; flex-wrap: wrap; }
+    .step { grid-template-columns: 1fr; }
+    .step .n { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="#top" aria-label="LessonLingo home">
+      <svg viewBox="0 0 56 48" role="img" aria-label="LessonLingo logo"><path d="M6 2h28a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H19l-8 7v-7H6a6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z" fill="#c2410c"/><text x="20" y="21" text-anchor="middle" font-size="18" font-weight="800" fill="#fff">A</text><path d="M31 19h19a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6h-1v6l-7-6H31a6 6 0 0 1-6-6V25a6 6 0 0 1 6-6z" fill="#fff" stroke="#c2410c" stroke-width="2.5"/><text x="40.5" y="37" text-anchor="middle" font-size="17" font-weight="700" fill="#c2410c">अ</text></svg>
+      <span>Lesson<span>Lingo</span></span>
+    </a>
+    <nav>
+      <a class="link" href="#what">What it does</a>
+      <a class="link" href="#how">How it works</a>
+      <a class="link" href="#specs">Specs</a>
+      <a class="link" href="#setup">Setup</a>
+      <a class="link" href="#proof">Proof</a>
+      <a class="btn small primary" href="https://github.com/ravisharma-09/lessonlingo">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- Hero -->
+<div class="wrap hero">
+  <div>
+    <p class="eyebrow">Open source for education</p>
+    <h1>Lectures in <em>your language</em>, on your own laptop.</h1>
+    <p class="lead">LessonLingo turns an English lecture into subtitles and a dubbed voice in Hindi, Kannada and eight more Indian languages. Open models, no cloud, no fee per use.</p>
+    <div class="actions">
+      <a class="btn primary" href="#setup">Setup guide</a>
+      <a class="btn" href="#proof">Watch the demo</a>
+      <a class="btn" href="https://github.com/ravisharma-09/lessonlingo">View on GitHub</a>
+    </div>
+    <small>Free and open source (MIT). Set up once, then no internet needed.</small>
+  </div>
+  <div class="window" aria-label="The LessonLingo app, drawn as a diagram">
+    <div class="dots"><i></i><i></i><i></i></div>
+    <div class="body">
+      <div class="menu"><span class="on">1 Add</span><span>2 Languages</span><span>3 Options</span><span>4 Check text</span><span>5 Result</span><span>Courses</span></div>
+      <div class="page">
+        <h4>Add</h4>
+        <div class="tiles"><b>Text</b><b class="on">Video</b><b>Audio</b><b>Subtitles</b></div>
+        <div class="drop">Drop a lecture here</div>
+        <div class="next">Next</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- What it does -->
+<section id="what" class="wrap">
+  <p class="eyebrow">What it does</p>
+  <h2>One English lecture in. Three things out.</h2>
+  <div class="grid3">
+    <div class="card"><span class="tag">SUBTITLES</span><h3>Every language, every line</h3><p>Subtitle files (.srt and .vtt) for each language you pick, or one video with all of them inside to switch in any player.</p></div>
+    <div class="card dark"><span class="tag">DUBBED VOICE</span><h3>A voice that sounds like a person</h3><p>Hindi and Kannada speech made locally with an open voice model. One video carries the original sound and every dubbed track.</p></div>
+    <div class="card"><span class="tag">FOR TEACHERS</span><h3>Check before you share</h3><p>Fix the English text before it is translated, keep words like photosynthesis untouched, and translate a whole course folder in one go.</p></div>
+  </div>
+</section>
+
+<!-- How it works -->
+<section id="how" class="wrap">
+  <p class="eyebrow">How it works</p>
+  <h2>Five steps, and you can go back at any one.</h2>
+  <ol class="steps" style="padding:0">
+    <li><b>Add</b><span>Text, video, audio or a subtitle file.</span></li>
+    <li><b>Languages</b><span>Tick the ones you need. Hindi and Kannada can also be spoken.</span></li>
+    <li><b>Options</b><span>Fast or best-quality model, and what you want back.</span></li>
+    <li><b>Check text</b><span>Fix any mistake in the English before it is translated.</span></li>
+    <li><b>Result</b><span>Watch it, switch audio and subtitles, download everything.</span></li>
+  </ol>
+  <div class="pipeline" aria-label="Pipeline">
+    <span>ffmpeg</span><i>→</i><span>Whisper</span><i>→</i><span>IndicTrans2</span><i>→</i><span>Voice (Parler-TTS or MMS)</span><i>→</i><span>.srt · .vtt · .mp4</span>
+  </div>
+  <p class="note" style="max-width:46rem">Each model is freed before the next one loads, so a laptop with 8 GB of graphics memory is enough. Timestamps never change, so subtitles stay in step with the picture.</p>
+</section>
+
+<!-- Specs -->
+<section id="specs" class="wrap">
+  <p class="eyebrow">Specifications</p>
+  <h2>What it needs, what it gives, how long it takes.</h2>
+  <div class="specs">
+    <div class="card">
+      <h3>What it supports</h3>
+      <table>
+        <tr><th>Input</th><td>Text (.md, .txt), video (mp4, mkv, mov, webm), audio (mp3, wav, m4a), subtitle files (.srt, .vtt). Source language: English.</td></tr>
+        <tr><th>Translates into</th><td>Hindi, Kannada, Tamil, Telugu, Malayalam, Bengali, Marathi, Gujarati, Punjabi, Odia.</td></tr>
+        <tr><th>Spoken voice</th><td>Hindi and Kannada.</td></tr>
+        <tr><th>Output</th><td>Subtitle files, video with subtitles inside, video with subtitles and dubbed audio tracks, a class pack zip.</td></tr>
+        <tr><th>Courses</th><td>A folder per class; batch translate from the app or the command line.</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Models (downloaded once)</h3>
+      <table>
+        <tr><th>Translation, fast</th><td>IndicTrans2 200M, about 1.1 GB. Runs on any laptop.</td></tr>
+        <tr><th>Translation, best</th><td>IndicTrans2 1B, about 4.5 GB. Needs an NVIDIA GPU.</td></tr>
+        <tr><th>Speech to text</th><td>Whisper (small) through faster-whisper, about 0.5 GB.</td></tr>
+        <tr><th>Voice, natural</th><td>Indic Parler-TTS, 3.75 GB. Sounds like a person. GPU recommended.</td></tr>
+        <tr><th>Voice, quick</th><td>Meta MMS-TTS, about 145 MB per language. Robotic, much faster. Non-commercial licence.</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Hardware</h3>
+      <table>
+        <tr><th>Tested on</th><td>Windows laptop, RTX 4070-class GPU (8 GB), 16 GB RAM, Python 3.11.</td></tr>
+        <tr><th>Any laptop (CPU)</th><td>Subtitles, text lessons and the quick voice should work, only slower. We have not measured CPU-only speed yet.</td></tr>
+        <tr><th>NVIDIA GPU</th><td>Needed for the best-quality model, and recommended for the natural voice.</td></tr>
+        <tr><th>Software</th><td>Python 3.11, ffmpeg, git (for the voice add-on), a free Hugging Face account for setup.</td></tr>
+      </table>
+    </div>
+    <div class="card times">
+      <h3>How long it takes</h3>
+      <table>
+        <tr><th>Listening</th><td><b>About 15 seconds</b> for each minute of video.</td></tr>
+        <tr><th>Subtitles, start to end</th><td><b>About 20 seconds</b> for each minute of video. We measured 12 seconds for a 61-second lecture on the test laptop.</td></tr>
+        <tr><th>Quick voice</th><td><b>About 1 minute</b> for each minute of video (estimate).</td></tr>
+        <tr><th>Natural voice</th><td><b>About 8 to 9 minutes</b> for each minute of video. Worth it for the sound, and you can cancel any time.</td></tr>
+        <tr><th>Text lesson</th><td>A few seconds.</td></tr>
+      </table>
+      <p class="note">Measured on our test laptop. Your numbers will differ with your hardware.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Setup -->
+<section id="setup" class="wrap">
+  <p class="eyebrow">Setup guide</p>
+  <h2>Install once. After that, no internet.</h2>
+  <p class="lead" style="margin-top:1rem">The first install, the model download and the Hugging Face login need internet. Translating afterwards does not.</p>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="win">Windows (tested)</button>
+    <button role="tab" aria-selected="false" data-tab="mac">macOS and Linux</button>
+  </div>
+
+  <div class="panel setup on" id="win">
+    <div class="step"><div class="n">1</div><div><h3>Install the basics</h3><p>Python 3.11, git and ffmpeg. In PowerShell:</p>
+      <div class="code" data-copy>winget install Python.Python.3.11
+winget install Git.Git
+winget install ffmpeg</div></div></div>
+    <div class="step"><div class="n">2</div><div><h3>Get the code</h3><p>Clone the repository and create a Python environment.</p>
+      <div class="code" data-copy>git clone https://github.com/ravisharma-09/lessonlingo.git
+Set-Location lessonlingo
+py -3.11 -m venv .venv
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip</div></div></div>
+    <div class="step"><div class="n">3</div><div><h3>Install PyTorch and the app</h3><p>For an NVIDIA GPU use the CUDA build. On a CPU-only laptop, install plain <code>torch</code> instead.</p>
+      <div class="code" data-copy>python -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+python -m pip install -r requirements.txt</div></div></div>
+    <div class="step"><div class="n">4</div><div><h3>Log in and accept the model terms</h3><p>Make a free Hugging Face account, accept the terms on both IndicTrans2 model pages, then log in.</p>
+      <div class="code" data-copy>hf auth login</div>
+      <p style="margin-top:.8rem"><a href="https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M">IndicTrans2 200M</a> · <a href="https://huggingface.co/ai4bharat/indictrans2-en-indic-1B">IndicTrans2 1B</a> · <a href="https://huggingface.co/ai4bharat/indic-parler-tts">Indic Parler-TTS</a> (for the natural voice)</p></div></div>
+    <div class="step"><div class="n">5</div><div><h3>Download the models</h3><p>One time, while online. Add the voice add-on if you want the natural Hindi and Kannada voice.</p>
+      <div class="code" data-copy>python -m pip install -r requirements-voice.txt
+lessonlingo setup --voices hin_Deva kan_Knda --voice-engine parler</div>
+      <p style="margin-top:.8rem">Skip the first line and add nothing after <code>setup</code> for subtitles only. Use <code>--voice-engine mms</code> for the small robotic voice.</p></div></div>
+    <div class="step"><div class="n">6</div><div><h3>Run it</h3><p>Turn Wi-Fi off if you like. Open the address it prints, usually <code>http://127.0.0.1:7860</code>.</p>
+      <div class="code" data-copy>lessonlingo app --warm light --offline</div></div></div>
+  </div>
+
+  <div class="panel setup" id="mac">
+    <div class="step"><div class="n">1</div><div><h3>Install the basics</h3><p>Python 3.11, git and ffmpeg (macOS with Homebrew).</p>
+      <div class="code" data-copy>brew install python@3.11 git ffmpeg</div></div></div>
+    <div class="step"><div class="n">2</div><div><h3>Get the code and install</h3>
+      <div class="code" data-copy>git clone https://github.com/ravisharma-09/lessonlingo.git
+cd lessonlingo
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install torch
+python -m pip install -r requirements.txt</div></div></div>
+    <div class="step"><div class="n">3</div><div><h3>Log in, download, run</h3><p>Same Hugging Face steps as Windows, then:</p>
+      <div class="code" data-copy>hf auth login
+lessonlingo setup
+lessonlingo app --warm light --offline</div>
+      <p style="margin-top:.8rem">We built and tested the real models on Windows with an NVIDIA GPU. macOS and Linux have only been run with test stand-ins so far.</p></div></div>
+  </div>
+
+  <div class="card" style="margin-top:1.4rem">
+    <h3>Or use the command line</h3>
+    <p>Everything in the app also works without it.</p>
+    <div class="code" data-copy>lessonlingo languages
+lessonlingo video .\lecture.mp4 --to kan_Knda hin_Deva --dub --offline --out .\outputs
+lessonlingo course new "Science 8" --to kan_Knda hin_Deva
+lessonlingo course translate "Science 8" --offline</div>
+  </div>
+</section>
+
+<!-- Proof -->
+<section id="proof" class="wrap">
+  <p class="eyebrow">Proof</p>
+  <h2>See it work, with the Wi-Fi off.</h2>
+  <p class="lead" style="margin-top:1rem">A real run on a real laptop: an English lecture in, subtitles and a dubbed voice out.</p>
+  <div class="proof" id="proof-box">
+    <div class="slot" id="proof-slot">
+      <div>
+        <svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="30" stroke="#c2410c" stroke-width="3"/><path d="M26 20l20 12-20 12z" fill="#c2410c"/></svg>
+        <b>The demo video goes here</b>
+        <span>Recorded on our laptop with the Wi-Fi off. Coming soon.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Limits and open source -->
+<section id="honest" class="wrap">
+  <p class="eyebrow">Honest limits</p>
+  <h2>What it cannot do yet.</h2>
+  <div class="two">
+    <div class="card">
+      <h3>Know before you use it</h3>
+      <ul class="list">
+        <li>Translation can be wrong. That is why there is a Check step, and why a fluent speaker should review important material.</li>
+        <li>Speech recognition can miss accents and technical words. Doubtful words are flagged.</li>
+        <li>The dubbed voice is one voice per language, with no emotion and no lip-sync.</li>
+        <li>Voice is Hindi and Kannada only. Other languages get subtitles.</li>
+        <li>It handles one job at a time and has no login, so keep it on your own laptop.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Not measured yet</h3>
+      <ul class="list">
+        <li>Lectures longer than a few minutes. We tested a 61-second lecture.</li>
+        <li>Speed on a laptop with no GPU.</li>
+        <li>A fluent-speaker rating of translation quality (a pilot sheet is in the repo).</li>
+        <li>macOS and Linux with the real models.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="open" class="wrap">
+  <p class="eyebrow">Open source</p>
+  <h2>Open code, open models, credit where it is due.</h2>
+  <div class="grid3">
+    <div class="card"><h3>Open code</h3><p>MIT licence, tests and CI, a contributing guide and conventional commits. The README names the AI coding tools we used.</p></div>
+    <div class="card"><h3>Open models</h3><p>IndicTrans2 and Indic Parler-TTS by AI4Bharat, Whisper by OpenAI through faster-whisper, and Meta MMS-TTS (non-commercial licence).</p></div>
+    <div class="card"><h3>Add a language</h3><p>Languages and voices sit behind small, separate pieces, so new ones can be added without touching the rest.</p></div>
+  </div>
+  <div class="faq" style="margin-top:2.4rem">
+    <h3>Questions</h3>
+    <details><summary>Why is there no hosted version to try?</summary><p>The models need a GPU and several gigabytes of weights, and the whole point is that nothing leaves your computer. So LessonLingo is a tool you run yourself. This page is the guide, and the proof video shows it working.</p></details>
+    <details><summary>Does it really work offline?</summary><p>Yes, after setup. The install, the model download and the Hugging Face login need internet once. After that, translating, listening and dubbing need none. Start the app with <code>--offline</code> to be sure.</p></details>
+    <details><summary>Can I use it on a basic laptop?</summary><p>Subtitles and text lessons should run on any laptop with the fast model, only slower. The best-quality model needs an NVIDIA GPU, and the natural voice is much happier with one. The quick voice is a lighter alternative.</p></details>
+    <details><summary>Is it free for schools?</summary><p>The code is MIT. Most models are permissive, but the quick MMS voice is non-commercial, so check each model's licence before using it for anything commercial.</p></details>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap cols">
+    <div>
+      <b>LessonLingo</b>
+      <p>Free lectures in your language.</p>
+      <p>Built by team <strong style="color:#fff">kyu batau??</strong> at Devf8rge × Hacktoberfest 2026, Bengaluru. Theme: Open Source for Education.</p>
+    </div>
+    <div>
+      <p><a href="https://github.com/ravisharma-09/lessonlingo">GitHub repository</a></p>
+      <p><a href="https://github.com/ravisharma-09/lessonlingo/blob/main/README.md">README</a></p>
+      <p><a href="https://github.com/ravisharma-09/lessonlingo/blob/main/LICENSE">MIT licence</a></p>
+      <p><a href="https://github.com/ravisharma-09/lessonlingo/blob/main/CONTRIBUTING.md">Contribute</a></p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Setup tabs
+  document.querySelectorAll('.tabs button').forEach(function (button) {
+    button.addEventListener('click', function () {
+      document.querySelectorAll('.tabs button').forEach(function (b) { b.setAttribute('aria-selected', String(b === button)); });
+      document.querySelectorAll('.setup').forEach(function (p) { p.classList.toggle('on', p.id === button.dataset.tab); });
+    });
+  });
+  // Copy buttons on every code block
+  document.querySelectorAll('.code[data-copy]').forEach(function (block) {
+    var text = block.textContent;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Copy';
+    button.addEventListener('click', function () {
+      var done = function () { button.textContent = 'Copied'; setTimeout(function () { button.textContent = 'Copy'; }, 1500); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { selectIt(block); });
+      } else { selectIt(block); }
+    });
+    block.appendChild(button);
+  });
+  function selectIt(node) {
+    var range = document.createRange(); range.selectNodeContents(node);
+    var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  }
+  // Proof video: shows itself as soon as media/demo.mp4 exists
+  fetch('media/demo.mp4', { method: 'HEAD' }).then(function (response) {
+    var type = response.headers.get('content-type') || '';
+    if (!response.ok || type.indexOf('video') !== 0) return;
+    var box = document.getElementById('proof-box');
+    var video = document.createElement('video');
+    video.controls = true; video.playsInline = true; video.preload = 'metadata';
+    video.src = 'media/demo.mp4';
+    video.poster = 'media/poster.jpg';
+    box.innerHTML = ''; box.appendChild(video);
+  }).catch(function () {});
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 48" width="56" height="48" role="img" aria-label="LessonLingo logo">
+  <path d="M6 2h28a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H19l-8 7v-7H6a6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z" fill="#c2410c"/>
+  <text x="20" y="21" text-anchor="middle" font-size="18" font-weight="800" fill="#ffffff" font-family="Arial, sans-serif">A</text>
+  <path d="M31 19h19a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6h-1v6l-7-6H31a6 6 0 0 1-6-6V25a6 6 0 0 1 6-6z" fill="#ffffff" stroke="#c2410c" stroke-width="2.5"/>
+  <text x="40.5" y="37" text-anchor="middle" font-size="17" font-weight="700" fill="#c2410c" font-family="Noto Sans Devanagari, Arial, sans-serif">अ</text>
+</svg>
