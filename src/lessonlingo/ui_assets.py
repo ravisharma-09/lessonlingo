@@ -76,7 +76,7 @@ FORCE_LIGHT_JS = """(() => {
 # These run before a step and hand its inputs on unchanged, so they work in any Gradio 6 version.
 LOADING_LISTEN_JS = (
     "(...args) => { window.llBusy('Listening to the lecture', "
-    "'The first run loads the speech model, so it can take a minute.'); return args; }"
+    "'Speech recognition takes about 15 seconds for every minute of audio.'); return args; }"
 )
 LOADING_TRANSLATE_JS = (
     "(...args) => { window.llBusy('Translating and making your files', "
@@ -102,6 +102,18 @@ STYLE_CSS = """
   --ll-border: #dce3e1; --ll-line: #dce3e1; --ll-text: #121a19; --ll-muted: #4f5957;
   --ll-off: #8a9896; --ll-night: #0e1414; --ll-night-text: #a9aeb8;
   --ll-display: "Bricolage Grotesque", "Avenir Next", Figtree, system-ui, sans-serif;
+}
+/* Gradio's own accent follows ours, so no stray green is left in any component. */
+:root {
+  --primary-50: var(--ll-soft); --primary-100: var(--ll-soft); --primary-200: var(--ll-soft);
+  --primary-300: var(--ll-accent-hi); --primary-400: var(--ll-accent-hi);
+  --primary-500: var(--ll-accent); --primary-600: var(--ll-accent); --primary-700: var(--ll-accent);
+  --color-accent: var(--ll-accent); --color-accent-soft: var(--ll-soft);
+  --block-label-background-fill: transparent; --block-label-text-color: var(--ll-muted);
+  --checkbox-background-color-selected: var(--ll-accent);
+  --checkbox-border-color-selected: var(--ll-accent);
+  --button-primary-background-fill: var(--ll-accent);
+  --button-primary-background-fill-hover: var(--ll-accent);
 }
 html, body, gradio-app, main, .app, .wrap, .gradio-container {
   background: var(--ll-page) !important; }

@@ -144,3 +144,16 @@ def test_embed_subtitles_with_real_ffmpeg(tmp_path: Path) -> None:
 
     probe = subprocess.run(["ffmpeg", "-i", str(out)], capture_output=True, text=True)
     assert "Subtitle" in probe.stderr
+
+
+def test_speech_recognition_defaults_to_the_cpu_unless_told_otherwise(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lessonlingo.video import FasterWhisperTranscriber
+
+    monkeypatch.delenv("LESSONLINGO_WHISPER_DEVICE", raising=False)
+    assert FasterWhisperTranscriber._detect_device() == "cpu"
+    monkeypatch.setenv("LESSONLINGO_WHISPER_DEVICE", "cuda")
+    assert FasterWhisperTranscriber._detect_device() == "cuda"
+    monkeypatch.setenv("LESSONLINGO_WHISPER_DEVICE", "nonsense")
+    assert FasterWhisperTranscriber._detect_device() == "cpu"

@@ -8,6 +8,7 @@ After that, no internet connection is needed.
 from __future__ import annotations
 
 import gc
+import os
 import shutil
 import subprocess
 import tempfile
@@ -116,17 +117,22 @@ class FasterWhisperTranscriber:
 
         device = self.requested_device or self._detect_device()
         compute_type = "float16" if device == "cuda" else "int8"
-        self._model = WhisperModel(self.size, device=device, compute_type=compute_type)
+        try:
+            self._model = WhisperModel(self.size, device=device, compute_type=compute_type)
+        except Exception:
+            if device == "cpu":
+                raise
+            device = "cpu"  # the GPU libraries are missing: fall back to the CPU
+            self._model = WhisperModel(self.size, device=device, compute_type="int8")
         self.device = device
 
     @staticmethod
     def _detect_device() -> str:
-        try:
-            import torch
+        """CPU unless LESSONLINGO_WHISPER_DEVICE=cuda: the GPU path needs extra NVIDIA libraries
+        and can hang on a machine that lacks them, while int8 on the CPU always works."""
 
-            return "cuda" if torch.cuda.is_available() else "cpu"
-        except ImportError:
-            return "cpu"
+        forced = os.environ.get("LESSONLINGO_WHISPER_DEVICE", "").strip().lower()
+        return forced if forced in ("cpu", "cuda") else "cpu"
 
     def transcribe(self, audio_path: Path) -> list[Cue]:
         """Transcribe English audio into timed cues."""
