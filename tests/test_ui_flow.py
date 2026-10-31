@@ -99,3 +99,10 @@ def test_steps_refuse_to_go_on_without_what_they_need(tmp_path: Path) -> None:
             )
     finally:
         app.close()
+
+
+def test_slow_steps_show_a_loader_that_errors_clear() -> None:
+    from lessonlingo.ui_assets import FORCE_LIGHT_JS, LOADING_DONE_JS, LOADING_LISTEN_JS
+
+    assert "llBusy" in LOADING_LISTEN_JS and "llDone" in LOADING_DONE_JS
+    assert "ll-busy" in FORCE_LIGHT_JS and "toast-body.error" in FORCE_LIGHT_JS

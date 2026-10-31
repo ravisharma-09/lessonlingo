@@ -27,7 +27,14 @@ from lessonlingo.pipeline import translate_segments
 from lessonlingo.subtitles import Cue, format_timestamp
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
 from lessonlingo.tts import VOICE_LANGUAGES, Synthesizer, dub_subtitles, make_synthesizer
-from lessonlingo.ui_assets import FORCE_LIGHT_JS, HERO_HTML, SCROLL_TOP_JS
+from lessonlingo.ui_assets import (
+    FORCE_LIGHT_JS,
+    HERO_HTML,
+    LOADING_DONE_JS,
+    LOADING_LISTEN_JS,
+    LOADING_TRANSLATE_JS,
+    SCROLL_TOP_JS,
+)
 from lessonlingo.ui_assets import STYLE_CSS as GREEN_CSS
 from lessonlingo.video import (
     FasterWhisperTranscriber,
@@ -1025,12 +1032,14 @@ def build_app(
         check_back.click(lambda: go_to("opts"), None, tabs)
         res_back.click(lambda: go_to("opts"), None, tabs)
         checked = [kind, text, upload, v_upload, targets, want]
-        v_listen.click(check_options, checked, None).success(
+        v_listen.click(None, None, None, js=LOADING_LISTEN_JS).then(
+            check_options, checked, None
+        ).success(
             on_listen,
             [v_upload, keep, sheet],
             [v_note, v_heard, v_table, tabs, t_check],
-        ).then(None, None, None, js=top)
-        v_go.click(
+        ).then(None, None, None, js=LOADING_DONE_JS).then(None, None, None, js=top)
+        v_go.click(None, None, None, js=LOADING_TRANSLATE_JS).then(
             on_translate_video,
             [v_upload, v_heard, v_table, targets, mode, keep, sheet, want],
             [
@@ -1046,15 +1055,17 @@ def build_app(
                 res_text,
             ],
         ).then(None, v_lang, None, js=SWITCH_TRACK_JS).then(None, v_voice, None, js=VOICE_JS).then(
-            None, None, None, js=top
-        )
+            None, None, None, js=LOADING_DONE_JS
+        ).then(None, None, None, js=top)
         v_lang.change(None, v_lang, None, js=SWITCH_TRACK_JS)
         v_voice.change(None, v_voice, None, js=VOICE_JS)
-        go.click(check_options, checked, None).success(
+        go.click(None, None, None, js=LOADING_TRANSLATE_JS).then(
+            check_options, checked, None
+        ).success(
             on_translate,
             [text, upload, targets, mode, keep, sheet],
             [files, review_state, review_lang, review_table, tabs, t_result, res_media, res_text],
-        ).then(None, None, None, js=top)
+        ).then(None, None, None, js=LOADING_DONE_JS).then(None, None, None, js=top)
         review_lang.change(on_review_language, [review_state, review_lang], review_table)
         save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
         again.click(

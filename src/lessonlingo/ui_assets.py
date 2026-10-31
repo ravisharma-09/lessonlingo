@@ -22,7 +22,55 @@ FORCE_LIGHT_JS = """() => {
     attributes: true,
     attributeFilter: ['class'],
   });
+  let timer = null;
+  let started = 0;
+  const overlay = () => {
+    let box = document.getElementById('ll-busy');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'll-busy';
+      box.hidden = true;
+      box.innerHTML = '<div class="card"><div class="spin"></div><p class="msg"></p>' +
+        '<p class="sub"></p><p class="time"></p></div>';
+      document.body.appendChild(box);
+    }
+    return box;
+  };
+  window.llDone = () => {
+    const box = overlay();
+    box.hidden = true;
+    if (timer) { clearInterval(timer); timer = null; }
+  };
+  window.llBusy = (message, hint) => {
+    const box = overlay();
+    box.querySelector('.msg').textContent = message;
+    box.querySelector('.sub').textContent = hint || '';
+    box.hidden = false;
+    started = Date.now();
+    const time = box.querySelector('.time');
+    time.textContent = '0 s';
+    if (timer) clearInterval(timer);
+    timer = setInterval(() => {
+      time.textContent = Math.round((Date.now() - started) / 1000) + ' s';
+    }, 1000);
+  };
+  // A failed step shows an error message: never leave the loader on top of it.
+  new MutationObserver(() => {
+    const box = document.getElementById('ll-busy');
+    if (!box || box.hidden) return;
+    if (document.querySelector('.toast-body.error, .toast-wrap .error')) window.llDone();
+  }).observe(document.body, { childList: true, subtree: true });
 }"""
+
+LOADING_LISTEN_JS = (
+    "() => { window.llBusy('Listening to the lecture', "
+    "'The first run loads the speech model, so it can take a minute.'); }"
+)
+LOADING_TRANSLATE_JS = (
+    "() => { window.llBusy('Translating and making your files', "
+    "'A dubbed voice takes a few minutes. Please keep this tab open.'); }"
+)
+LOADING_DONE_JS = "() => { window.llDone(); }"
 
 SCROLL_TOP_JS = "() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }"
 
@@ -156,6 +204,35 @@ button.secondary { min-height: 54px; font-size: 1.05rem !important; font-weight:
   background: transparent !important; border: 0 !important; color: var(--ll-accent) !important;
   text-decoration: underline; font-weight: 600 !important; box-shadow: none !important;
   padding: 4px 0 !important; width: auto; align-self: flex-start; }
+
+/* Tables (Check text, lesson review): same fonts and colours as the rest */
+.table-wrap, .table-wrap * { font-family: "Figtree", system-ui, sans-serif !important; }
+.table-wrap { border: 1px solid var(--ll-border) !important; border-radius: 20px !important;
+  background: var(--ll-surface) !important; overflow: hidden; }
+.table-wrap th { background: var(--ll-soft) !important; color: var(--ll-soft-text) !important;
+  font-size: 0.95rem !important; font-weight: 800 !important; letter-spacing: 0.02em; }
+.table-wrap td, .table-wrap td * { font-size: 1.05rem !important; color: var(--ll-text) !important; }
+.table-wrap td { padding: 10px 12px !important; }
+.table-wrap tr:hover td { background: var(--ll-soft) !important; }
+.table-wrap td:focus-within, .table-wrap td.focus { outline: 2px solid var(--ll-accent) !important;
+  outline-offset: -2px; }
+.table-wrap input, .table-wrap textarea { color: var(--ll-text) !important; }
+
+/* Loading overlay */
+#ll-busy { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
+  background: rgba(241, 244, 243, 0.86); backdrop-filter: blur(4px); }
+#ll-busy[hidden] { display: none; }
+#ll-busy .card { background: var(--ll-surface); border: 1px solid var(--ll-border);
+  border-radius: 28px; padding: 36px 44px; text-align: center; max-width: 460px;
+  box-shadow: 0 20px 60px rgba(14, 20, 20, 0.15); }
+#ll-busy .spin { width: 54px; height: 54px; margin: 0 auto 20px; border-radius: 50%;
+  border: 5px solid var(--ll-soft); border-top-color: var(--ll-accent);
+  animation: ll-spin 0.9s linear infinite; }
+#ll-busy .msg { font-family: var(--ll-display); font-size: 1.6rem; font-weight: 800;
+  letter-spacing: -0.02em; margin: 0 0 8px; color: var(--ll-text); }
+#ll-busy .sub { margin: 0 0 12px; color: var(--ll-muted); }
+#ll-busy .time { margin: 0; color: var(--ll-off); font-variant-numeric: tabular-nums; }
+@keyframes ll-spin { to { transform: rotate(360deg); } }
 
 /* Video */
 .ll-player { position: relative; }
