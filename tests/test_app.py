@@ -258,3 +258,17 @@ def test_voices_are_embedded_in_the_page_not_served_from_a_file_route(tmp_path: 
     assert '<audio preload="auto" data-code="hin_Deva" src="data:audio/' in html
     assert "/gradio_api/file=" + str(wav) not in html
     assert 'class="ll-warn" hidden' in html and "Audio" in html
+
+
+def test_player_has_its_own_subtitle_layer_with_settings_and_fullscreen(tmp_path: Path) -> None:
+    from lessonlingo.app import player_html
+
+    vtt = tmp_path / "a.vtt"
+    vtt.write_text("WEBVTT\n", encoding="utf-8")
+
+    html = player_html("/tmp/a.mp4", {"kan_Knda": str(vtt)}, "kan_Knda")
+
+    assert 'class="ll-sub"' in html and "llFullscreen()" in html
+    for group in ("Size", "Position", "Background", "Width"):
+        assert f'<p class="grp">{group}</p>' in html
+    assert "llSet('size','5')" in html and "llSet('pos','middle')" in html

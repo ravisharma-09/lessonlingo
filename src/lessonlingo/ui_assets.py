@@ -306,6 +306,29 @@ button.ll-pressed::after { content: ""; position: absolute; right: 18px; top: 50
 #ll-busy .time { margin: 0; color: var(--ll-off); font-variant-numeric: tabular-nums; }
 @keyframes ll-spin { to { transform: rotate(360deg); } }
 
+/* Video and subtitles: our own subtitle layer, so size, place and width are yours to set */
+.ll-player { container-type: inline-size; }
+.ll-sub { position: absolute; z-index: 2; left: 0; right: 0; bottom: 64px; pointer-events: none;
+  text-align: center; font-weight: 700; line-height: 1.3; white-space: pre-line; color: #ffffff;
+  padding: 0.3em 2%; background: rgba(0, 0, 0, 0.78);
+  font-size: calc(var(--ll-sub-size, 5) * 1vw); font-size: calc(var(--ll-sub-size, 5) * 1cqw); }
+.ll-sub[hidden] { display: none; }
+.ll-player[data-sub-pos="middle"] .ll-sub { top: 50%; bottom: auto; transform: translateY(-50%); }
+.ll-player[data-sub-pos="top"] .ll-sub { top: 8%; bottom: auto; }
+.ll-player[data-sub-bg="none"] .ll-sub { background: transparent;
+  text-shadow: 0 0 6px #000, 0 0 3px #000, 0 2px 4px #000; }
+.ll-player[data-sub-bg="light"] .ll-sub { background: rgba(255, 255, 255, 0.92); color: #111111; }
+.ll-player[data-sub-width="centered"] .ll-sub { left: 14%; right: 14%; border-radius: 12px; }
+.ll-player video::-webkit-media-controls-fullscreen-button { display: none; }
+.ll-player:fullscreen { background: #000; display: flex; align-items: center; }
+.ll-player:fullscreen video { width: 100% !important; height: 100% !important;
+  object-fit: contain; border-radius: 0 !important; }
+.ll-set { min-width: 250px; }
+.ll-set .grp { color: #b8aca5; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; margin: 8px 8px 2px; }
+.ll-set .row { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 4px; }
+.ll-set .row button { padding: 7px 12px; font-size: 0.92rem; }
+
 /* Video */
 .ll-player { position: relative; }
 .ll-menus { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 3;

@@ -141,3 +141,13 @@ def test_text_in_gives_one_file_per_language(client) -> None:
     )
     names = [Path(f["name"] if isinstance(f, dict) else f).name for f in files]
     assert any("hin_Deva" in n for n in names) and any("kan_Knda" in n for n in names)
+
+
+def test_dubbed_audio_is_offered_only_when_a_chosen_language_can_be_spoken(client) -> None:
+    punjabi = client.predict("video", ["pan_Guru"], "dub", api_name="/refresh_want")
+    hindi = client.predict("video", ["pan_Guru", "hin_Deva"], "embed", api_name="/refresh_want")
+
+    assert "dub" not in str(punjabi[0]) and "embed" in str(punjabi[0])
+    assert "dub" in str(hindi[0]) and "embed" in str(hindi[0])
+    other = client.predict("subs", ["pan_Guru"], "subs", api_name="/refresh_want")
+    assert "voice" not in str(other[0])

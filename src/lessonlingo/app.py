@@ -306,23 +306,67 @@ def _file_url(path: str) -> str:
 
 
 SWITCH_TRACK_JS = """(code) => {
+  const player = () => document.querySelector('#lecture-player .ll-player');
+  const DEFAULTS = { size: '5', pos: 'bottom', bg: 'dark', width: 'full' };
+  const readSub = () => {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem('ll-sub') || '{}'); } catch (e) { saved = {}; }
+    return Object.assign({}, DEFAULTS, saved);
+  };
+  const paintSub = () => {
+    const box = player();
+    if (!box) return;
+    const s = readSub();
+    box.style.setProperty('--ll-sub-size', s.size);
+    box.dataset.subPos = s.pos;
+    box.dataset.subBg = s.bg;
+    box.dataset.subWidth = s.width;
+  };
+  const showCues = (track) => {
+    const box = player();
+    const out = box && box.querySelector('.ll-sub');
+    if (!out) return;
+    const cues = track && track.activeCues ? Array.from(track.activeCues) : [];
+    out.textContent = cues.map((c) => c.text).join('\\n');
+    out.hidden = !out.textContent;
+  };
+  const select = (value) => {
+    const video = document.querySelector('#lecture-player video');
+    if (!video) return;
+    video.querySelectorAll('track').forEach((el) => {
+      const track = el.track;
+      if (!track) return;
+      track.oncuechange = null;
+      if (el.dataset.code === value) {
+        track.mode = 'hidden';
+        track.oncuechange = () => showCues(track);
+        showCues(track);
+      } else {
+        track.mode = 'disabled';
+      }
+    });
+    if (value === 'off') showCues(null);
+  };
   window.llPick = (kind, value) => {
-    const root = document.querySelector('#lecture-player');
-    const video = root && root.querySelector('video');
-    if (kind === 'sub' && value === 'off' && video) {
-      video.querySelectorAll('track').forEach((el) => {
-        if (el.track) el.track.mode = 'disabled';
-      });
-      return;
-    }
-    if (kind === 'sub' && video) {
-      video.querySelectorAll('track').forEach((el) => {
-        if (el.track) el.track.mode = el.dataset.code === value ? 'showing' : 'disabled';
-      });
-    }
+    if (kind === 'sub') select(value);
+    if (kind === 'sub' && value === 'off') return;
     const box = document.querySelector(kind === 'sub' ? '#lecture-lang' : '#lecture-voice');
     const input = box && box.querySelector('input[type=radio][value="' + value + '"]');
     if (input) input.click();
+  };
+  window.llSet = (key, value) => {
+    const s = readSub();
+    s[key] = value;
+    try { localStorage.setItem('ll-sub', JSON.stringify(s)); } catch (e) { /* private window */ }
+    paintSub();
+    document.querySelectorAll('#lecture-player .ll-set button').forEach((b) => {
+      b.classList.toggle('on', readSub()[b.dataset.key] === b.dataset.value);
+    });
+  };
+  window.llFullscreen = () => {
+    const box = player();
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (box && box.requestFullscreen) box.requestFullscreen();
   };
   window.llMenu = (kind, button) => {
     const root = document.querySelector('#lecture-player');
@@ -332,24 +376,30 @@ SWITCH_TRACK_JS = """(code) => {
     const open = pop.hidden;
     pops.forEach((el) => { el.hidden = true; });
     if (!open) return;
-    let active = kind === 'audio' ? (window.__voice || 'original') : 'off';
-    if (kind === 'sub') {
-      video.querySelectorAll('track').forEach((el) => {
-        if (el.track && el.track.mode === 'showing') active = el.dataset.code;
+    if (kind === 'set') {
+      const s = readSub();
+      pop.querySelectorAll('button').forEach((b) => {
+        b.classList.toggle('on', s[b.dataset.key] === b.dataset.value);
+      });
+    } else {
+      let active = kind === 'audio' ? (window.__voice || 'original') : 'off';
+      if (kind === 'sub') {
+        video.querySelectorAll('track').forEach((el) => {
+          if (el.track && el.track.mode === 'hidden') active = el.dataset.code;
+        });
+      }
+      pop.querySelectorAll('button').forEach((b) => {
+        b.classList.toggle('on', b.dataset.value === active);
       });
     }
-    pop.querySelectorAll('button').forEach((b) => {
-      b.classList.toggle('on', b.dataset.value === active);
-    });
     pop.hidden = false;
   };
   const apply = (tries) => {
     const video = document.querySelector('#lecture-player video');
     const tracks = video ? video.querySelectorAll('track') : [];
     if (!tracks.length) { if (tries > 0) setTimeout(() => apply(tries - 1), 200); return; }
-    tracks.forEach((el) => {
-      if (el.track) el.track.mode = el.dataset.code === code ? 'showing' : 'disabled';
-    });
+    paintSub();
+    select(code);
   };
   apply(15);
 }"""
@@ -503,16 +553,50 @@ def player_html(
         (code, SUPPORTED_LANGUAGES[code]) for code in voices or {}
     ]
     menus = _menu("sub", "CC", "Subtitles", sub_items)
+    menus += _settings_menu()
     if voices:
         menus += _menu("audio", "Audio", "Audio track", audio_items)
+    menus += (
+        '<div class="ll-menu"><button type="button" class="ll-btn" title="Fullscreen" '
+        'onclick="llFullscreen()">Full</button></div>'
+    )
     dubs = {code: _file_url(path) for code, path in (dubbed_videos or {}).items()}
     return (
         '<div class="ll-player">'
         f'<video controls playsinline preload="auto" src="{_file_url(video)}" '
         f'data-original="{_file_url(video)}" data-dubs="{html.escape(json.dumps(dubs))}" '
         f'style="width:100%;border-radius:14px;background:#000;display:block">{tracks}</video>'
+        '<div class="ll-sub" hidden></div>'
         f'<div class="ll-menus">{menus}</div>{voice_tags}'
         f'<p class="ll-warn" hidden>{VOICE_WARNING}</p></div>'
+    )
+
+
+SUBTITLE_SETTINGS = (
+    ("size", "Size", (("3", "Small"), ("4", "Medium"), ("5", "Large"), ("6", "Extra large"))),
+    ("pos", "Position", (("bottom", "Bottom"), ("middle", "Middle"), ("top", "Top"))),
+    ("bg", "Background", (("dark", "Dark box"), ("light", "Light box"), ("none", "None"))),
+    ("width", "Width", (("full", "Full width"), ("centered", "Centred"))),
+)
+
+
+def _settings_menu() -> str:
+    """The subtitle settings pop-up: size, position, background and width."""
+
+    groups = "".join(
+        f'<p class="grp">{title}</p><div class="row">'
+        + "".join(
+            f'<button type="button" data-key="{key}" data-value="{value}" '
+            f"onclick=\"llSet('{key}','{value}')\">{label}</button>"
+            for value, label in options
+        )
+        + "</div>"
+        for key, title, options in SUBTITLE_SETTINGS
+    )
+    return (
+        '<div class="ll-menu"><button type="button" class="ll-btn" title="Subtitle settings" '
+        "onclick=\"llMenu('set',this)\">Aa</button>"
+        f'<div class="ll-pop ll-set" hidden>{groups}</div></div>'
     )
 
 
@@ -892,7 +976,25 @@ def build_app(
     def go_to(tab_id: str) -> Any:
         return gr.Tabs(selected=tab_id)
 
-    def on_kind(kind: str) -> tuple[Any, ...]:
+    def want_update(kind: str, targets: list[str], want: str) -> Any:
+        """The "You get" choices: voice is offered only when a chosen language can be spoken."""
+
+        voiced = any(code in VOICE_LANGUAGES for code in targets)
+        if kind == "video":
+            choices = WANT_VIDEO if voiced else WANT_VIDEO[:2]
+            fallback = "dub" if voiced else "embed"
+        else:
+            choices = WANT_OTHER if voiced else WANT_OTHER[:1]
+            fallback = "voice" if voiced else "subs"
+        value = want if want in [v for _, v in choices] else fallback
+        return gr.Radio(choices=choices, value=value, visible=kind != "text")
+
+    def refresh_want(kind: str, targets: list[str], want: str) -> tuple[Any, Any]:
+        update = want_update(kind, targets, want)
+        value = update.value if hasattr(update, "value") else want
+        return update, gr.Radio(visible=kind != "text" and value in ("voice", "dub"))
+
+    def on_kind(kind: str, targets: list[str]) -> tuple[Any, ...]:
         text_in = kind == "text"
         label = {"video": "Video file", "audio": "Audio file", "subs": "Subtitle file"}.get(
             kind, "File"
@@ -901,11 +1003,7 @@ def build_app(
             gr.Column(visible=text_in),
             gr.Column(visible=not text_in),
             gr.File(label=label),
-            gr.Radio(
-                choices=WANT_VIDEO if kind == "video" else WANT_OTHER,
-                value="dub" if kind == "video" else "voice",
-                visible=not text_in,
-            ),
+            want_update(kind, targets, "dub" if kind == "video" else "voice"),
             gr.Button(visible=not text_in),
             gr.Button(visible=text_in),
         )
@@ -1112,7 +1210,8 @@ def build_app(
             trigger(voice_note, [kind, targets, want, voice_quality], want_note)
         for trigger in (kind.change, want.change):
             trigger(on_want, [kind, want], voice_quality)
-        kind.change(on_kind, kind, [text_col, file_col, v_upload, want, v_listen, go])
+        kind.change(on_kind, [kind, targets], [text_col, file_col, v_upload, want, v_listen, go])
+        targets.change(refresh_want, [kind, targets, want], [want, voice_quality])
         add_next.click(check_add, [kind, text, upload, v_upload], tabs).then(
             None, None, None, js=top
         )
