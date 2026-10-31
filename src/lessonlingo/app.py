@@ -1184,6 +1184,7 @@ def build_app(
         ).then(None, None, None, js=top)
         app.load(library.on_load, None, [library.course, *library.view])
         app.load(lambda: gr.Radio(choices=WANT_VIDEO, value="dub"), None, want)
+        app.load(voice_note, [kind, targets, want, voice_quality], want_note)
         library.send.click(
             lambda course, name: (
                 (
