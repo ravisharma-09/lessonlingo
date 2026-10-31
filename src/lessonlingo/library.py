@@ -101,6 +101,10 @@ def build_library_tab(
     def on_translate_all(course: str | None, progress: Any = None) -> tuple[Any, ...]:
         if not course:
             raise gr.Error("Create or choose a course first.")
+        if not workspace.settings(course)["targets"]:
+            raise gr.Error("Pick languages and press Save settings first.")
+        if not workspace.list_items(course):
+            raise gr.Error("This course has no files yet. Add some first.")
         progress = progress or gr.Progress()
         mode: Mode = workspace.settings(course)["mode"]  # type: ignore[assignment]
         models.close()  # free the GPU before the speech model loads
@@ -143,19 +147,36 @@ def build_library_tab(
 
     courses = workspace.list_courses()
     first = courses[0] if courses else None
-    gr.Markdown(
-        "Keep a whole course in one place: add videos and lessons, then translate them all."
-    )
-    with gr.Row():
-        course = gr.Dropdown(label="Course", choices=courses, value=first, scale=2)
-        new_name = gr.Textbox(label="New course name", placeholder="Science grade 8", scale=2)
-        create = gr.Button("Create course", scale=1)
-    note = gr.Markdown()
-    upload = gr.File(
-        label="Add videos, audio, .srt files and lessons (.md, .txt)",
-        file_count="multiple",
-    )
-    add = gr.Button("Add to course", size="sm")
+    with gr.Row(elem_classes="split"):
+        with gr.Column(scale=2, min_width=320, elem_classes="side-card"):
+            course = gr.Dropdown(label="Course", choices=courses, value=first)
+            with gr.Row():
+                new_name = gr.Textbox(
+                    show_label=False, placeholder="New course name", scale=3, container=False
+                )
+                create = gr.Button("Create", scale=1)
+            note = gr.Markdown(elem_classes="hint")
+            upload = gr.File(
+                label="Add files (video, audio, .srt, lessons)",
+                file_count="multiple",
+                height=140,
+            )
+            add = gr.Button("Add to course", variant="secondary")
+        with gr.Column(scale=3, min_width=320, elem_classes="side-card"):
+            targets = gr.CheckboxGroup(label="Languages", choices=language_choices, value=[])
+            mode = gr.Radio(
+                label="Translation model",
+                choices=mode_choices,
+                value="light",
+                elem_classes="lang-chips",
+            )
+            sheet = gr.File(
+                label="Glossary file (.csv, optional)",
+                file_types=[".csv"],
+                type="filepath",
+                height=140,
+            )
+            save = gr.Button("Save settings", variant="secondary")
     table = gr.Dataframe(
         headers=["Name", "Type", "Translated into"],
         datatype=["str", "str", "str"],
@@ -164,22 +185,14 @@ def build_library_tab(
         type="array",
         value=item_rows(workspace, first),
     )
-    translate_all = gr.Button("Translate everything", variant="primary", size="lg")
-    pack = gr.File(label="Course pack (.zip) for sharing", visible=False)
-    with gr.Accordion("One file: check or remove", open=False):
+    pack = gr.File(label="Course pack (.zip)", visible=False)
+    with gr.Accordion("Manage one file", open=False):
         item = gr.Dropdown(label="File", choices=[], value=None)
-        send = gr.Button("Check this lecture's English first")
+        send = gr.Button("Open in Add", variant="secondary")
         confirm = gr.Checkbox(label="Yes, move this file to the trash")
-        remove = gr.Button("Remove file")
-    with gr.Accordion("Course settings", open=False):
-        targets = gr.CheckboxGroup(label="Languages", choices=language_choices, value=[])
-        mode = gr.Radio(label="Translation model", choices=mode_choices, value="light")
-        sheet = gr.File(
-            label="Course glossary (.csv: term, then the exact word per language)",
-            file_types=[".csv"],
-            type="filepath",
-        )
-        save = gr.Button("Save settings")
+        remove = gr.Button("Remove file", variant="secondary")
+    with gr.Row(elem_classes="nav-bar"):
+        translate_all = gr.Button("Translate everything", variant="primary", size="lg")
 
     view = [note, table, item, targets, mode, pack]
     create.click(on_create, [new_name], [course, *view])

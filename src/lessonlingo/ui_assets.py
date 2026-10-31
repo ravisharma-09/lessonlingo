@@ -11,11 +11,12 @@ HERO_HTML = """
 """
 
 FORCE_LIGHT_JS = """() => {
-  const url = new URL(window.location);
-  if (url.searchParams.get('__theme') !== 'light') {
-    url.searchParams.set('__theme', 'light');
-    window.location.href = url.href;
-  }
+  const light = () => document.body.classList.remove('dark');
+  light();
+  new MutationObserver(light).observe(document.body, {
+    attributes: true,
+    attributeFilter: ['class'],
+  });
 }"""
 
 SCROLL_TOP_JS = "() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }"
@@ -52,6 +53,10 @@ fieldset.block { padding: 0 !important; border: 0 !important; background: transp
 #shell > .tab-wrapper .tab-container { flex-direction: column !important; height: auto !important;
   gap: 4px; align-items: stretch; }
 #shell > .tab-wrapper .tab-container::after { display: none !important; }
+#shell > .tab-wrapper .tab-container.visually-hidden { display: none !important; }
+/* Gradio adds a second copy of the last tab once its page has loaded; show six only. */
+#shell > .tab-wrapper .tab-container button[role="tab"]:nth-child(n + 7) {
+  display: none !important; }
 #shell > .tab-wrapper .overflow-menu { display: none !important; }
 #shell > .tab-wrapper button[role="tab"] { text-align: left; justify-content: flex-start;
   padding: 14px 16px !important; border-radius: 12px !important; border: 0 !important;

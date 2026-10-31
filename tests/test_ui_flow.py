@@ -59,3 +59,41 @@ def test_whole_lecture_flow_through_the_real_app(tmp_path: Path) -> None:
         assert "Water cycle." in srt.read_text(encoding="utf-8")
     finally:
         app.close()
+
+
+def test_steps_refuse_to_go_on_without_what_they_need(tmp_path: Path) -> None:
+    pytest.importorskip("gradio")
+    client_module = pytest.importorskip("gradio_client")
+    from lessonlingo.app import ModelHolder, build_app
+    from lessonlingo.translator import FakeTranslator
+    from lessonlingo.tts import FakeSynthesizer
+    from lessonlingo.video import FakeTranscriber
+    from lessonlingo.workspace import Workspace
+
+    app = build_app(
+        ModelHolder(lambda mode: FakeTranslator()),
+        FakeTranscriber,
+        Workspace(tmp_path / "home"),
+        FakeSynthesizer,
+    )
+    _, url, _ = app.launch(prevent_thread_lock=True, server_port=None, quiet=True)
+    try:
+        client = client_module.Client(url, verbose=False)
+        with pytest.raises(Exception, match="video"):
+            client.predict("video", "", None, None, api_name="/check_add")
+        with pytest.raises(Exception, match="at least one language"):
+            client.predict([], api_name="/check_languages")
+        talk = tmp_path / "talk.srt"
+        talk.write_text("1\n00:00:00,000 --> 00:00:02,000\nHello.\n", encoding="utf-8")
+        with pytest.raises(Exception, match="Hindi and Kannada"):
+            client.predict(
+                "subs",
+                "",
+                None,
+                client_module.handle_file(str(talk)),
+                ["tam_Taml"],
+                "voice",
+                api_name="/check_options",
+            )
+    finally:
+        app.close()

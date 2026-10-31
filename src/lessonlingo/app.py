@@ -26,12 +26,13 @@ from lessonlingo.pack import make_class_pack
 from lessonlingo.pipeline import translate_segments
 from lessonlingo.subtitles import Cue, format_timestamp
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
-from lessonlingo.tts import Synthesizer, dub_subtitles, make_synthesizer
+from lessonlingo.tts import VOICE_LANGUAGES, Synthesizer, dub_subtitles, make_synthesizer
 from lessonlingo.ui_assets import FORCE_LIGHT_JS, HERO_HTML, SCROLL_TOP_JS
 from lessonlingo.ui_assets import STYLE_CSS as GREEN_CSS
 from lessonlingo.video import (
     FasterWhisperTranscriber,
     Transcriber,
+    embed_subtitles,
     is_doubtful,
     transcribe_lecture,
     translate_lecture,
@@ -52,15 +53,25 @@ MODE_CHOICES: list[tuple[str, str]] = [
     ("Best quality: 1B model (NVIDIA GPU)", "quality"),
 ]
 
+VIDEO_FILES = {".mp4", ".mkv", ".mov", ".webm", ".m4v", ".avi"}
+AUDIO_FILES = {".mp3", ".wav", ".m4a"}
+SUBTITLE_FILES = {".srt", ".vtt"}
+KIND_FILES = {"video": VIDEO_FILES, "audio": AUDIO_FILES, "subs": SUBTITLE_FILES}
+KIND_NAMES = {"video": "a video", "audio": "an audio file", "subs": "a .srt or .vtt file"}
 KIND_CHOICES: list[tuple[str, str]] = [
     ("Text", "text"),
     ("Video", "video"),
     ("Audio", "audio"),
     ("Subtitle file", "subs"),
 ]
-WANT_CHOICES: list[tuple[str, str]] = [
-    ("Subtitles", "subs"),
-    ("Subtitles and voice", "voice"),
+WANT_VIDEO: list[tuple[str, str]] = [
+    ("Subtitle files", "subs"),
+    ("Video with subtitles inside", "embed"),
+    ("Video with subtitles and dubbed audio", "dub"),
+]
+WANT_OTHER: list[tuple[str, str]] = [
+    ("Subtitle files", "subs"),
+    ("Subtitle files and voice", "voice"),
 ]
 
 NOTE = (
@@ -593,6 +604,10 @@ def build_app(
     language_choices = [
         (f"{name} \u00b7 {NATIVE_NAMES[code]}", code) for code, name in SUPPORTED_LANGUAGES.items()
     ]
+    voice_choices = [
+        (label + (" \u00b7 voice" if code in VOICE_LANGUAGES else ""), code)
+        for label, code in language_choices
+    ]
 
     def on_listen(
         upload: str | None, keep: str, sheet: str | None, progress: Any = None
@@ -633,7 +648,7 @@ def build_app(
         want: str,
         progress: Any = None,
     ) -> tuple[Any, ...]:
-        dub = want == "voice"
+        dub = want in ("voice", "dub")
         if not targets:
             raise gr.Error("Pick at least one language.")
         if not heard or not upload:
@@ -671,8 +686,16 @@ def build_app(
                     folder,
                     synth,
                     note=speak_note,
+                    subtitles_in_video=want == "dub",
                 )
                 engine = getattr(synth, "engine_name", "")
+            if want == "embed" and Path(upload).suffix.lower() in VIDEO_FILES:
+                tracks = {p.name.split(".")[-2]: p for p in written if p.suffix == ".srt"}
+                tracks.pop("en", None)
+                if tracks:
+                    spoken.append(
+                        embed_subtitles(Path(upload), tracks, folder / f"{stem}.subtitled.mp4")
+                    )
             pack = make_class_pack(
                 [*written, *[p for p in spoken if p.suffix == ".wav"]],
                 folder / f"{stem}.classpack.zip",
@@ -693,6 +716,10 @@ def build_app(
             if has_video
             else "Your subtitle files are below."
         )
+        if want == "embed" and has_video:
+            help_text += " The video with subtitles inside is in Downloads."
+        if want == "dub" and has_video:
+            help_text += " The video with subtitles and dubbed audio is in Downloads."
         if wavs and has_video:
             help_text += f" Voice: {engine}." if engine else ""
         elif dub and not wavs:
@@ -716,6 +743,48 @@ def build_app(
             gr.Column(visible=False),
         )
 
+    def check_add(kind: str, text: str, doc: str | None, media: str | None) -> Any:
+        """Stop on the Add page with a clear message when nothing usable was added."""
+
+        if kind == "text":
+            if not (text or "").strip() and not doc:
+                raise gr.Error("Type or paste some text, or upload a .md or .txt file.")
+        else:
+            if not media:
+                raise gr.Error(f"Add {KIND_NAMES[kind]} first.")
+            if Path(media).suffix.lower() not in KIND_FILES[kind]:
+                allowed = ", ".join(sorted(KIND_FILES[kind]))
+                raise gr.Error(f"That is not {KIND_NAMES[kind]}. Use {allowed}.")
+        return gr.Tabs(selected="lang")
+
+    def check_languages(targets: list[str]) -> Any:
+        if not targets:
+            raise gr.Error("Pick at least one language.")
+        return gr.Tabs(selected="opts")
+
+    def check_options(
+        kind: str,
+        text: str,
+        doc: str | None,
+        media: str | None,
+        targets: list[str],
+        want: str,
+    ) -> None:
+        """Catch every problem before the slow part starts."""
+
+        check_add(kind, text, doc, media)
+        check_languages(targets)
+        if kind != "text" and want in ("voice", "dub"):
+            voiced = [code for code in targets if code in VOICE_LANGUAGES]
+            if not voiced:
+                raise gr.Error(
+                    "Voice is only available for Hindi and Kannada. Tick one of them on "
+                    "Languages, or choose Subtitle files."
+                )
+            if len(voiced) < len(targets):
+                names = " and ".join(SUPPORTED_LANGUAGES[code] for code in voiced)
+                gr.Warning(f"Voice will be made for {names} only. Other languages get subtitles.")
+
     def page_head(title: str, why: str = "") -> None:
         gr.Markdown(f"## {title}\n{why}" if why else f"## {title}", elem_classes="page-head")
 
@@ -731,7 +800,11 @@ def build_app(
             gr.Column(visible=text_in),
             gr.Column(visible=not text_in),
             gr.File(label=label),
-            gr.Radio(visible=not text_in),
+            gr.Radio(
+                choices=WANT_VIDEO if kind == "video" else WANT_OTHER,
+                value="subs",
+                visible=not text_in,
+            ),
             gr.Button(visible=not text_in),
             gr.Button(visible=text_in),
         )
@@ -803,7 +876,8 @@ def build_app(
                     page_head("Languages")
                     targets = gr.CheckboxGroup(
                         label="Translate into",
-                        choices=language_choices,
+                        info="Languages marked voice can also be spoken.",
+                        choices=voice_choices,
                         value=["kan_Knda", "hin_Deva"],
                     )
                     with gr.Row(elem_classes="nav-bar"):
@@ -824,7 +898,7 @@ def build_app(
                     want = gr.Radio(
                         label="You get",
                         info="Voice is Hindi and Kannada only, and takes a few minutes longer.",
-                        choices=WANT_CHOICES,
+                        choices=[*WANT_VIDEO, WANT_OTHER[1]],
                         value="subs",
                         elem_classes="lang-chips",
                     )
@@ -924,13 +998,16 @@ def build_app(
 
         top = SCROLL_TOP_JS
         kind.change(on_kind, kind, [text_col, file_col, v_upload, want, v_listen, go])
-        add_next.click(lambda: go_to("lang"), None, tabs).then(None, None, None, js=top)
+        add_next.click(check_add, [kind, text, upload, v_upload], tabs).then(
+            None, None, None, js=top
+        )
         lang_back.click(lambda: go_to("add"), None, tabs)
-        lang_next.click(lambda: go_to("opts"), None, tabs).then(None, None, None, js=top)
+        lang_next.click(check_languages, [targets], tabs).then(None, None, None, js=top)
         opts_back.click(lambda: go_to("lang"), None, tabs)
         check_back.click(lambda: go_to("opts"), None, tabs)
         res_back.click(lambda: go_to("opts"), None, tabs)
-        v_listen.click(
+        checked = [kind, text, upload, v_upload, targets, want]
+        v_listen.click(check_options, checked, None).success(
             on_listen,
             [v_upload, keep, sheet],
             [v_note, v_heard, v_table, tabs, t_check],
@@ -955,7 +1032,7 @@ def build_app(
         )
         v_lang.change(None, v_lang, None, js=SWITCH_TRACK_JS)
         v_voice.change(None, v_voice, None, js=VOICE_JS)
-        go.click(
+        go.click(check_options, checked, None).success(
             on_translate,
             [text, upload, targets, mode, keep, sheet],
             [files, review_state, review_lang, review_table, tabs, t_result, res_media, res_text],
@@ -968,6 +1045,7 @@ def build_app(
             [v_upload, v_heard, v_state, v_player, edited, tabs, t_check, t_result],
         ).then(None, None, None, js=top)
         app.load(library.on_load, None, [library.course, *library.view])
+        app.load(lambda: gr.Radio(choices=WANT_VIDEO, value="subs"), None, want)
         library.send.click(
             lambda course, name: (
                 (

@@ -383,17 +383,31 @@ def render_dub(
 
 
 def ffmpeg_dub_command(
-    video: Path, tracks: dict[str, Path], out: Path, has_audio: bool = True
+    video: Path,
+    tracks: dict[str, Path],
+    out: Path,
+    has_audio: bool = True,
+    subtitles: dict[str, Path] | None = None,
 ) -> list[str]:
-    """Build the ffmpeg command that adds each spoken track to the video as an audio stream."""
+    """Build the ffmpeg command that adds each spoken track to the video as an audio stream.
 
+    With `subtitles`, every subtitle file is added too as a selectable mp4 text track.
+    """
+
+    subtitles = subtitles or {}
     command = ["ffmpeg", "-y", "-i", str(video)]
-    for path in tracks.values():
+    for path in [*tracks.values(), *subtitles.values()]:
         command += ["-i", str(path)]
     command += ["-map", "0:v", "-map", "0:a?"]
-    for index in range(len(tracks)):
+    for index in range(len(tracks) + len(subtitles)):
         command += ["-map", str(index + 1)]
     command += ["-c:v", "copy", "-c:a", "aac"]
+    if subtitles:
+        from lessonlingo.video import _iso_language
+
+        command += ["-c:s", "mov_text"]
+        for index, code in enumerate(subtitles):
+            command += [f"-metadata:s:s:{index}", f"language={_iso_language(code)}"]
     offset = 1 if has_audio else 0
     for index, code in enumerate(tracks):
         iso = {"ory": "ori"}.get(code[:3], code[:3])
@@ -402,14 +416,24 @@ def ffmpeg_dub_command(
     return command + [str(out)]
 
 
-def add_dubbed_audio(video: Path, tracks: dict[str, Path], out: Path) -> Path:
-    """Write a copy of the video that keeps the original sound and adds the spoken tracks."""
+def add_dubbed_audio(
+    video: Path,
+    tracks: dict[str, Path],
+    out: Path,
+    subtitles: dict[str, Path] | None = None,
+) -> Path:
+    """Write a copy of the video that keeps the original sound and adds the spoken tracks.
+
+    Given `subtitles`, the same file also carries every subtitle language as a text track.
+    """
 
     probe = subprocess.run(
         ["ffmpeg", "-hide_banner", "-i", str(video)], capture_output=True, text=True, check=False
     )
     result = subprocess.run(
-        ffmpeg_dub_command(video, tracks, out, has_audio="Audio:" in probe.stderr),
+        ffmpeg_dub_command(
+            video, tracks, out, has_audio="Audio:" in probe.stderr, subtitles=subtitles
+        ),
         capture_output=True,
         text=True,
         check=False,
@@ -443,6 +467,7 @@ def dub_subtitles(
     out_dir: Path,
     synthesizer: Synthesizer,
     note: Callable[[str], None] | None = None,
+    subtitles_in_video: bool = False,
 ) -> list[Path]:
     """Speak translated subtitle files; also make dubbed videos when `source` is a video.
 
@@ -485,5 +510,14 @@ def dub_subtitles(
             written.append(
                 add_voice_only(source, wav, out_dir / f"{source.stem}.{code}.dubbed.mp4")
             )
-        written.append(add_dubbed_audio(source, tracks, out_dir / f"{source.stem}.dubbed.mp4"))
+        subtitle_tracks = {}
+        if subtitles_in_video:
+            subtitle_tracks = {
+                srt.name.split(".")[-2]: srt for srt in srt_files if srt.name.split(".")[-2] != "en"
+            }
+        written.append(
+            add_dubbed_audio(
+                source, tracks, out_dir / f"{source.stem}.dubbed.mp4", subtitles=subtitle_tracks
+            )
+        )
     return written

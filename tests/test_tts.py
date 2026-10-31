@@ -96,6 +96,15 @@ def test_add_dubbed_audio_with_real_ffmpeg(tmp_path: Path) -> None:
     probe = subprocess.run(["ffmpeg", "-i", str(out)], capture_output=True, text=True)
     assert probe.stderr.count("Audio:") == 2
 
+    srt = tmp_path / "clip.hin_Deva.srt"
+    srt.write_text("1\n00:00:00,000 --> 00:00:02,000\nनमस्ते\n", encoding="utf-8")
+    both = tts.add_dubbed_audio(
+        clip, {"kan_Knda": wav}, tmp_path / "both.mp4", subtitles={"hin_Deva": srt}
+    )
+
+    probe = subprocess.run(["ffmpeg", "-i", str(both)], capture_output=True, text=True)
+    assert probe.stderr.count("Audio:") == 2 and probe.stderr.count("Subtitle:") == 1
+
 
 def test_engine_factory_and_auto_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(tts.make_synthesizer("mms"), tts.MMSSynthesizer)
@@ -209,3 +218,15 @@ def test_time_stretch_keeps_length_ratio_or_falls_back() -> None:
     faster = tts._time_stretch(clip, 16000, 1.5)
 
     assert 0.6 * 16000 <= len(faster) <= 0.75 * 16000
+
+
+def test_dub_command_adds_subtitle_tracks_after_the_audio() -> None:
+    command = tts.ffmpeg_dub_command(
+        Path("in.mp4"),
+        {"kan_Knda": Path("k.wav")},
+        Path("out.mp4"),
+        subtitles={"hin_Deva": Path("h.srt")},
+    )
+
+    assert command.count("-i") == 3 and "mov_text" in command and "language=hin" in command
+    assert command.index("h.srt") > command.index("k.wav")
