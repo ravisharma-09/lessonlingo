@@ -6,69 +6,27 @@ HERO_HTML = """
 <div id="topbar">
   <span class="mark" aria-hidden="true">L</span>
   <b>LessonLingo</b>
-  <span class="tag">Free lectures in your language. Set up once, then no internet needed.</span>
-  <div class="pick"><span class="label">Colour</span><button type="button" class="sw" data-accent="teal" title="Teal" style="background:#0f766e" onclick="llTheme('accent','teal')"></button><button type="button" class="sw" data-accent="green" title="Green" style="background:#16803c" onclick="llTheme('accent','green')"></button><button type="button" class="sw" data-accent="blue" title="Blue" style="background:#2563eb" onclick="llTheme('accent','blue')"></button><button type="button" class="sw" data-accent="purple" title="Purple" style="background:#7c3aed" onclick="llTheme('accent','purple')"></button><button type="button" class="sw" data-accent="orange" title="Orange" style="background:#c2410c" onclick="llTheme('accent','orange')"></button>
-    <button type="button" class="mode" onclick="llTheme('mode')">Dark mode</button></div>
+  <span class="tag">Translate lectures and lessons. Works offline.</span>
 </div>
 """
 
-THEME_JS = """() => {
-  const get = (key, fallback) => {
-    try { return localStorage.getItem('ll-' + key) || fallback; } catch (e) { return fallback; }
-  };
-  const put = (key, value) => {
-    try { localStorage.setItem('ll-' + key, value); } catch (e) { /* private window */ }
-  };
-  const paint = () => {
-    const accent = get('accent', 'teal');
-    const mode = get('mode', 'light');
-    document.body.dataset.accent = accent;
-    document.body.classList.toggle('dark', mode === 'dark');
-    document.querySelectorAll('#topbar .sw').forEach((b) => {
-      b.classList.toggle('on', b.dataset.accent === accent);
-    });
-    const button = document.querySelector('#topbar .mode');
-    if (button) button.textContent = mode === 'dark' ? 'Light mode' : 'Dark mode';
-  };
-  window.llTheme = (kind, value) => {
-    if (kind === 'mode') value = get('mode', 'light') === 'dark' ? 'light' : 'dark';
-    put(kind, value);
-    paint();
-  };
-  paint();
-  setTimeout(paint, 600);
-  setTimeout(paint, 1800);
+FORCE_LIGHT_JS = """() => {
+  const url = new URL(window.location);
+  if (url.searchParams.get('__theme') !== 'light') {
+    url.searchParams.set('__theme', 'light');
+    window.location.href = url.href;
+  }
 }"""
 
 SCROLL_TOP_JS = "() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }"
 
 STYLE_CSS = """
-/* Colours are variables: the accent and light or dark are chosen from the header. */
+/* One theme: white surfaces, one teal accent. */
 :root, body {
-  --ll-accent: #0f766e; --ll-head: #0b5a54; --ll-soft: #e3f4f1; --ll-soft-text: #0b4b46;
-  --ll-accent-ink: #ffffff; --ll-surface: #ffffff; --ll-page: #f4f8f7; --ll-border: #d5e5e2;
-  --ll-text: #0f2a27; --ll-muted: #475f5b; --ll-off: #6b7f7b; --ll-line: #d5e5e2;
+  --ll-accent: #0f766e; --ll-accent-ink: #ffffff; --ll-soft: #e8f5f3; --ll-soft-text: #0b4b46;
+  --ll-surface: #ffffff; --ll-page: #f6f8f8; --ll-border: #dbe5e3; --ll-line: #dbe5e3;
+  --ll-text: #14201f; --ll-muted: #52615f; --ll-off: #8a9896;
 }
-body[data-accent="green"] { --ll-accent: #16803c; --ll-head: #0f5a2b; --ll-soft: #e6f6ec;
-  --ll-soft-text: #0f3d22; --ll-border: #d3e4d9; --ll-line: #d3e4d9; }
-body[data-accent="blue"] { --ll-accent: #2563eb; --ll-head: #1e3a8a; --ll-soft: #e8efff;
-  --ll-soft-text: #1e3a8a; --ll-border: #d6e0f5; --ll-line: #d6e0f5; }
-body[data-accent="purple"] { --ll-accent: #7c3aed; --ll-head: #4c1d95; --ll-soft: #f0e9ff;
-  --ll-soft-text: #4c1d95; --ll-border: #e2d8f5; --ll-line: #e2d8f5; }
-body[data-accent="orange"] { --ll-accent: #c2410c; --ll-head: #7c2d12; --ll-soft: #ffeedd;
-  --ll-soft-text: #7c2d12; --ll-border: #f1dccb; --ll-line: #f1dccb; }
-body.dark { --ll-surface: #16201f; --ll-page: #0e1514; --ll-border: #2b3d3a; --ll-line: #2b3d3a;
-  --ll-text: #e8f3f1; --ll-muted: #a9c0bc; --ll-off: #86a09b; --ll-soft: #1c3331;
-  --ll-soft-text: #d3f0eb; --ll-accent-ink: #06201d; }
-body.dark[data-accent="green"] { --ll-soft: #1c3426; --ll-soft-text: #d6f5e0; }
-body.dark[data-accent="blue"] { --ll-soft: #1c2a4a; --ll-soft-text: #dbe6ff; }
-body.dark[data-accent="purple"] { --ll-soft: #2a1f47; --ll-soft-text: #eadfff; }
-body.dark[data-accent="orange"] { --ll-soft: #3d2415; --ll-soft-text: #ffe3cc; }
-body.dark { --ll-accent: #2dd4bf; }
-body.dark[data-accent="green"] { --ll-accent: #3ecf6e; }
-body.dark[data-accent="blue"] { --ll-accent: #60a5fa; }
-body.dark[data-accent="purple"] { --ll-accent: #a78bfa; }
-body.dark[data-accent="orange"] { --ll-accent: #fb923c; }
 body, .gradio-container { background: var(--ll-page) !important; color: var(--ll-text); }
 
 /* Page shell: full width, teal band on top, menu on the left, page on the right. */
@@ -79,20 +37,12 @@ footer { display: none !important; }
 .form { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 fieldset.block { padding: 0 !important; border: 0 !important; background: transparent !important; }
 
-#topbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--ll-head);
-  color: #fff; margin: 0 -28px 24px; padding: 14px 28px; }
-#topbar .mark { color: var(--ll-head) !important; width: 38px; height: 38px; border-radius: 10px; background: #fff;
-  display: grid; place-items: center; font-weight: 900; font-size: 1.3rem; }
-#topbar b, #topbar .tag, #topbar .label { color: #fff !important; }
-#topbar b { font-size: 1.4rem; letter-spacing: -.01em; }
-#topbar .tag { opacity: .85; font-size: .95rem; flex: 1; min-width: 200px; }
-#topbar .pick { display: flex; align-items: center; gap: 10px; }
-#topbar .pick .label { font-size: .85rem; opacity: .85; }
-#topbar .sw { width: 24px; height: 24px; border-radius: 50%; border: 3px solid rgba(255,255,255,.5);
-  cursor: pointer; padding: 0; }
-#topbar .sw.on { border-color: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,.25); }
-#topbar .mode { border: 2px solid rgba(255,255,255,.7); background: transparent; color: #fff;
-  border-radius: 999px; padding: 4px 14px; font-weight: 700; cursor: pointer; }
+#topbar { display: flex; align-items: center; gap: 12px; background: var(--ll-surface);
+  border-bottom: 1px solid var(--ll-border); margin: 0 -28px 24px; padding: 14px 28px; }
+#topbar .mark { width: 36px; height: 36px; border-radius: 10px; background: var(--ll-accent);
+  color: #fff !important; display: grid; place-items: center; font-weight: 900; font-size: 1.2rem; }
+#topbar b { font-size: 1.3rem; color: var(--ll-text) !important; }
+#topbar .tag { color: var(--ll-muted) !important; font-size: .95rem; }
 
 #shell.tabs { display: grid !important; grid-template-columns: 290px minmax(0, 1fr); gap: 32px;
   align-items: start; }
@@ -109,16 +59,15 @@ fieldset.block { padding: 0 !important; border: 0 !important; background: transp
   background: transparent !important; height: auto !important; }
 #shell > .tab-wrapper button[role="tab"]:hover { background: var(--ll-soft) !important; }
 #shell > .tab-wrapper button[role="tab"].selected::after { display: none !important; }
-#shell > .tab-wrapper button[role="tab"].selected { background: var(--ll-accent) !important;
-  color: var(--ll-accent-ink) !important; font-weight: 800; }
+#shell > .tab-wrapper button[role="tab"].selected { background: var(--ll-soft) !important;
+  color: var(--ll-accent) !important; font-weight: 800; }
 #shell > .tab-wrapper button[role="tab"]:disabled { opacity: .45; cursor: not-allowed; }
-#shell > .tab-wrapper button[role="tab"]:nth-child(5),
-#shell > .tab-wrapper button[role="tab"]:nth-child(7) { margin-top: 14px; position: relative; }
+#shell > .tab-wrapper button[role="tab"]:nth-child(6) { margin-top: 14px; position: relative; }
 #shell > .tabitem { grid-column: 2; padding: 0 !important; border: 0 !important; }
 
 .page { gap: 20px !important; padding-bottom: 12px; }
 .page-head h2 { font-size: 2rem; font-weight: 800; margin: 0 0 6px; color: var(--ll-text); }
-.page-head p { margin: 0; color: var(--ll-muted); font-size: 1.05rem; max-width: 70ch; }
+.page-head p { margin: 0; color: var(--ll-muted); font-size: 1rem; }
 .hint, .hint p { color: var(--ll-muted) !important; font-size: 0.98rem; }
 .split { gap: 28px !important; align-items: flex-start !important; }
 .split > * { min-width: 0; }

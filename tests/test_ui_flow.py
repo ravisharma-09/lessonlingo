@@ -3,11 +3,11 @@ from pathlib import Path
 import pytest
 
 
-def test_header_has_no_halloween_art_and_offers_colours_and_dark_mode() -> None:
-    from lessonlingo.ui_assets import HERO_HTML
+def test_header_is_plain_with_one_theme() -> None:
+    from lessonlingo.ui_assets import HERO_HTML, STYLE_CSS
 
-    assert "pumpkin" not in HERO_HTML.lower() and "<svg" not in HERO_HTML
-    assert HERO_HTML.count('class="sw"') == 5 and "llTheme('mode')" in HERO_HTML
+    assert "<svg" not in HERO_HTML and "pumpkin" not in HERO_HTML.lower()
+    assert "data-accent" not in STYLE_CSS and "body.dark" not in STYLE_CSS
 
 
 def test_whole_lecture_flow_through_the_real_app(tmp_path: Path) -> None:
@@ -48,7 +48,7 @@ def test_whole_lecture_flow_through_the_real_app(tmp_path: Path) -> None:
             "light",
             "",
             None,
-            False,
+            "subs",
             api_name="/on_translate_video",
         )
         shown = result[0]["value"] if isinstance(result[0], dict) else result[0]
