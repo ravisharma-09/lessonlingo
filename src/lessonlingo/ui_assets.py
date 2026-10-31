@@ -35,7 +35,11 @@ body, .gradio-container { background: var(--ll-page) !important; color: var(--ll
   padding: 0 28px 40px !important; font-size: 17px; }
 .html-container { padding: 0 !important; }
 footer { display: none !important; }
-.form { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+.form { background: transparent !important; border: 0 !important; box-shadow: none !important;
+  gap: 18px !important; }
+span[data-testid="block-info"], .block label > span { color: var(--ll-muted) !important;
+  font-weight: 700; }
+.block:has(button.upload-container) { height: auto !important; }
 fieldset.block { padding: 0 !important; border: 0 !important; background: transparent !important; }
 
 #topbar { display: flex; align-items: center; gap: 12px; background: var(--ll-surface);
@@ -85,7 +89,8 @@ fieldset.block { padding: 0 !important; border: 0 !important; background: transp
 .nav-bar > * { flex: 0 1 auto !important; min-width: 200px; }
 
 /* Drop area */
-button.upload-container { border: 2px dashed var(--ll-accent) !important;
+button.upload-container { min-height: 190px; padding: 44px 16px 20px !important;
+  border: 2px dashed var(--ll-accent) !important;
   background: var(--ll-soft) !important; border-radius: 16px !important;
   color: var(--ll-soft-text) !important; }
 button.upload-container * { color: var(--ll-soft-text) !important; }
