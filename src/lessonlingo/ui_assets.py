@@ -161,6 +161,20 @@ button.secondary { min-height: 56px; font-size: 1.05rem !important; font-weight:
 .row-buttons > * { flex: 1; }
 
 /* Video */
+.ll-player { position: relative; }
+.ll-menus { position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 3;
+  opacity: 0; transition: opacity .15s; }
+.ll-player:hover .ll-menus, .ll-player:focus-within .ll-menus { opacity: 1; }
+.ll-menu { position: relative; }
+.ll-btn { min-width: 56px; min-height: 36px; padding: 0 12px; border-radius: 10px; border: 0;
+  background: rgba(0, 0, 0, 0.72); color: #fff; font-weight: 800; cursor: pointer; }
+.ll-pop { position: absolute; right: 0; top: 42px; min-width: 170px; padding: 6px;
+  border-radius: 12px; background: rgba(0, 0, 0, 0.88); display: flex; flex-direction: column; }
+.ll-pop[hidden] { display: none; }
+.ll-pop button { text-align: left; padding: 10px 12px; border: 0; border-radius: 8px;
+  background: transparent; color: #fff; font-size: 1rem; cursor: pointer; }
+.ll-pop button:hover { background: rgba(255, 255, 255, 0.16); }
+.ll-pop button.on { background: #16803c; font-weight: 800; }
 video::cue { font-size: 1.3em; background: rgba(0, 0, 0, 0.78); color: #ffffff; }
 
 @media (max-width: 700px) {

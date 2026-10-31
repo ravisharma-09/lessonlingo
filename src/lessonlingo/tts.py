@@ -42,8 +42,12 @@ PARLER_DESCRIPTION = (
     "{speaker}'s voice is clear and warm, speaking at a moderate pace with a calm tone. "
     "The recording is very clear, with no background noise."
 )
-MAX_SPEEDUP = 1.3
+MAX_SPEEDUP = 1.5
 TAIL_SECONDS = 1.0
+SILENCE_LEVEL = 400  # samples quieter than this (of 32767) count as silence at a clip's edges
+EDGE_PAD_SECONDS = 0.04
+EARLY_SECONDS = 0.3  # a clip that still will not fit may start this much before its cue
+GAP_SECONDS = 0.15  # pause kept before the next cue when a clip borrows the gap after its cue
 
 
 def voice_repository(language: str) -> str:
@@ -282,6 +286,41 @@ def _speed_up(pcm: array, factor: float) -> array:
     return out
 
 
+def _trim_silence(pcm: array, rate: int) -> array:
+    """Cut the quiet stretch at both ends of a spoken clip (voice models pad their output)."""
+
+    loud = [i for i, sample in enumerate(pcm) if abs(sample) > SILENCE_LEVEL]
+    if not loud:
+        return pcm
+    pad = int(EDGE_PAD_SECONDS * rate)
+    return pcm[max(loud[0] - pad, 0) : min(loud[-1] + pad, len(pcm))]
+
+
+def _time_stretch(pcm: array, rate: int, factor: float) -> array:
+    """Make a clip `factor` times faster without raising the pitch, using ffmpeg's atempo.
+
+    atempo is a time-stretch filter that ships with ffmpeg, which the lecture pipeline needs
+    anyway. If ffmpeg cannot do it, the plain resampling speed-up is used instead.
+    """
+
+    command = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "s16le", "-ar", str(rate),
+        "-ac", "1", "-i", "pipe:0", "-filter:a", f"atempo={factor:.4f}",
+        "-f", "s16le", "-ar", str(rate), "-ac", "1", "pipe:1",
+    ]  # fmt: skip
+    try:
+        result = subprocess.run(
+            command, input=pcm.tobytes(), capture_output=True, check=False, timeout=60
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return _speed_up(pcm, factor)
+    if result.returncode != 0 or len(result.stdout) < 2:
+        return _speed_up(pcm, factor)
+    out = array("h")
+    out.frombytes(result.stdout[: len(result.stdout) // 2 * 2])
+    return out
+
+
 def render_dub(
     cues: list[Cue],
     language: str,
@@ -291,32 +330,40 @@ def render_dub(
 ) -> tuple[Path, float]:
     """Speak every cue at its start time and write one mono WAV file.
 
-    A clip longer than its slot is sped up by at most 1.3 times. If it is still too long, the
-    next clips start later instead of overlapping, so the voice can fall slightly behind the
-    picture. Returns (path, the largest delay in seconds).
+    Each clip is trimmed of its leading and trailing silence. A clip longer than its slot may
+    use the pause before the next cue, then is time-stretched (pitch kept) by at most 1.5 times.
+    If it still does not fit it starts up to 0.3 s early, and only after that do the next clips
+    start later instead of overlapping, so the voice can fall slightly behind the picture.
+    Returns (path, the largest delay in seconds).
     """
 
-    clips: list[tuple[float, float, array]] = []
+    spoken: list[tuple[Cue, array]] = []
     rate = 0
     speakable = [cue for cue in cues if cue.text.strip()]
     for done, cue in enumerate(speakable, start=1):
         samples, rate = synthesizer.synthesize(cue.text, language)
         if samples:
-            clips.append((cue.start, cue.end, _to_pcm(samples)))
+            spoken.append((cue, _trim_silence(_to_pcm(samples), rate)))
         if on_line:
             on_line(done, len(speakable))
-    if not clips:
+    if not spoken:
         raise RuntimeError("There was nothing to speak.")
 
     placed: list[tuple[int, array]] = []
     cursor = 0
     largest_delay = 0.0
-    for start, end, pcm in clips:
-        slot = max(int((end - start) * rate), 1)
+    for index, (cue, pcm) in enumerate(spoken):
+        start = int(cue.start * rate)
+        end = cue.end
+        if index + 1 < len(spoken):
+            end = max(end, min(spoken[index + 1][0].start - GAP_SECONDS, end + 1.5))
+        slot = max(int((end - cue.start) * rate), 1)
         if len(pcm) > slot:
-            pcm = _speed_up(pcm, min(len(pcm) / slot, MAX_SPEEDUP))
-        position = max(int(start * rate), cursor)
-        largest_delay = max(largest_delay, (position - int(start * rate)) / rate)
+            pcm = _time_stretch(pcm, rate, min(len(pcm) / slot, MAX_SPEEDUP))
+        position = max(start, cursor)
+        if len(pcm) > slot:
+            position = max(start - int(EARLY_SECONDS * rate), cursor)
+        largest_delay = max(largest_delay, (position - start) / rate)
         placed.append((position, pcm))
         cursor = position + len(pcm)
 

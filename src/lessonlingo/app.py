@@ -280,6 +280,43 @@ def _file_url(path: str) -> str:
 
 
 SWITCH_TRACK_JS = """(code) => {
+  window.llPick = (kind, value) => {
+    const root = document.querySelector('#lecture-player');
+    const video = root && root.querySelector('video');
+    if (kind === 'sub' && value === 'off' && video) {
+      video.querySelectorAll('track').forEach((el) => {
+        if (el.track) el.track.mode = 'disabled';
+      });
+      return;
+    }
+    if (kind === 'sub' && video) {
+      video.querySelectorAll('track').forEach((el) => {
+        if (el.track) el.track.mode = el.dataset.code === value ? 'showing' : 'disabled';
+      });
+    }
+    const box = document.querySelector(kind === 'sub' ? '#lecture-lang' : '#lecture-voice');
+    const input = box && box.querySelector('input[type=radio][value="' + value + '"]');
+    if (input) input.click();
+  };
+  window.llMenu = (kind, button) => {
+    const root = document.querySelector('#lecture-player');
+    const video = root.querySelector('video');
+    const pops = root.querySelectorAll('.ll-pop');
+    const pop = button.parentElement.querySelector('.ll-pop');
+    const open = pop.hidden;
+    pops.forEach((el) => { el.hidden = true; });
+    if (!open) return;
+    let active = kind === 'audio' ? (window.__voice || 'original') : 'off';
+    if (kind === 'sub') {
+      video.querySelectorAll('track').forEach((el) => {
+        if (el.track && el.track.mode === 'showing') active = el.dataset.code;
+      });
+    }
+    pop.querySelectorAll('button').forEach((b) => {
+      b.classList.toggle('on', b.dataset.value === active);
+    });
+    pop.hidden = false;
+  };
   const apply = (tries) => {
     const video = document.querySelector('#lecture-player video');
     const tracks = video ? video.querySelectorAll('track') : [];
@@ -361,9 +398,33 @@ def player_html(
         f'<audio preload="auto" data-code="{code}" src="{_file_url(path)}"></audio>'
         for code, path in (voices or {}).items()
     )
+    sub_items = [("off", "Off")] + [(code, SUPPORTED_LANGUAGES[code]) for code in subtitles]
+    audio_items = [("original", "Original")] + [
+        (code, SUPPORTED_LANGUAGES[code]) for code in voices or {}
+    ]
+    menus = _menu("sub", "CC", "Subtitles", sub_items)
+    if voices:
+        menus += _menu("audio", "Audio", "Audio track", audio_items)
     return (
+        '<div class="ll-player">'
         f'<video controls preload="metadata" src="{_file_url(video)}" '
-        f'style="width:100%;border-radius:14px;background:#000">{tracks}</video>{voice_tags}'
+        f'style="width:100%;border-radius:14px;background:#000;display:block">{tracks}</video>'
+        f'<div class="ll-menus">{menus}</div></div>{voice_tags}'
+    )
+
+
+def _menu(kind: str, short: str, title: str, items: list[tuple[str, str]]) -> str:
+    """One pop-up menu button in the player: pick a subtitle language or an audio track."""
+
+    options = "".join(
+        f'<button type="button" data-value="{value}" onclick="llPick(\'{kind}\',\'{value}\');'
+        f'this.parentElement.hidden=true">{label}</button>'
+        for value, label in items
+    )
+    return (
+        f'<div class="ll-menu"><button type="button" class="ll-btn" title="{title}" '
+        f"onclick=\"llMenu('{kind}',this)\">{short}</button>"
+        f'<div class="ll-pop" hidden>{options}</div></div>'
     )
 
 
@@ -732,13 +793,17 @@ def build_app(
                             v_player = gr.HTML(padding=False, elem_id="lecture-player")
                         with gr.Column(scale=2, min_width=300):
                             v_lang = gr.Radio(
-                                label="Subtitles", choices=[], elem_classes="lang-chips"
+                                label="Subtitles",
+                                choices=[],
+                                elem_classes="lang-chips",
+                                elem_id="lecture-lang",
                             )
                             v_voice = gr.Radio(
                                 label="Voice",
                                 choices=[("Original voice", "original")],
                                 value="original",
                                 elem_classes="lang-chips",
+                                elem_id="lecture-voice",
                                 visible=False,
                             )
                             v_files = gr.File(

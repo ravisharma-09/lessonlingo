@@ -40,7 +40,7 @@ def test_long_speech_is_sped_up_then_pushed_later_not_overlapped(tmp_path: Path)
 
     path, delay = render_dub(cues, "hin_Deva", FakeSynthesizer(), tmp_path / "b.wav")
 
-    assert delay > 4.0  # 10 s / 1.3 is about 7.7 s, so "Next" starts about 5.7 s late
+    assert delay > 4.0  # 10 s / 1.5 is about 6.7 s, so "Next" starts over 4 s late
     assert _seconds(path) > 7.0
 
 
@@ -181,3 +181,31 @@ def test_only_tested_languages_are_spoken_and_each_gets_its_own_video(tmp_path: 
         ["ffmpeg", "-i", str(tmp_path / "clip.kan_Knda.dubbed.mp4")], capture_output=True, text=True
     )
     assert probe.stderr.count("Audio:") == 1
+
+
+def test_silence_at_clip_edges_is_trimmed() -> None:
+    from array import array
+
+    padded = array("h", [0] * 4000 + [8000] * 2000 + [0] * 4000)
+
+    trimmed = tts._trim_silence(padded, 16000)
+
+    assert 2000 <= len(trimmed) <= 2000 + 2 * int(tts.EDGE_PAD_SECONDS * 16000)
+
+
+def test_clip_borrows_the_pause_after_its_cue_before_it_is_sped_up(tmp_path: Path) -> None:
+    cues = [Cue(0.0, 2.0, "x" * 50), Cue(5.0, 7.0, "Next")]  # 2.5 s of speech, slot 2 s plus gap
+
+    _, delay = render_dub(cues, "hin_Deva", FakeSynthesizer(), tmp_path / "d.wav")
+
+    assert delay == 0.0  # fits in the 2 s cue plus the pause, so nothing falls behind
+
+
+def test_time_stretch_keeps_length_ratio_or_falls_back() -> None:
+    from array import array
+
+    clip = array("h", [3000, -3000] * 8000)  # 1 second at 16 kHz
+
+    faster = tts._time_stretch(clip, 16000, 1.5)
+
+    assert 0.6 * 16000 <= len(faster) <= 0.75 * 16000
