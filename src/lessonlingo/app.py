@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from lessonlingo import cancel
 from lessonlingo.glossary import GlossaryTranslator, load_glossary, parse_terms
 from lessonlingo.languages import NATIVE_NAMES, SUPPORTED_LANGUAGES, validate_targets
 from lessonlingo.library import build_library_tab
@@ -36,6 +37,7 @@ from lessonlingo.ui_assets import (
     LOADING_DONE_JS,
     LOADING_LISTEN_JS,
     LOADING_TRANSLATE_JS,
+    LOADING_VIDEO_JS,
     SCROLL_TOP_JS,
 )
 from lessonlingo.ui_assets import STYLE_CSS as GREEN_CSS
@@ -69,6 +71,8 @@ SUBTITLE_FILES = {".srt", ".vtt"}
 KIND_FILES = {"video": VIDEO_FILES, "audio": AUDIO_FILES, "subs": SUBTITLE_FILES}
 KIND_NAMES = {"video": "a video", "audio": "an audio file", "subs": "a .srt or .vtt file"}
 DUB_PER_LANGUAGE = re.compile(r"^.*\.([a-z]{3}_[A-Za-z]{4})\.dubbed\.mp4$")
+TIME_NATURAL = "Natural voice takes about 8 to 9 minutes for each minute of video."
+TIME_QUICK = "Quick voice takes about 1 minute for each minute of video."
 KIND_CHOICES: list[tuple[str, str]] = [
     ("Text", "text"),
     ("Video", "video"),
@@ -162,6 +166,8 @@ def lan_address(port: int) -> str | None:
 def friendly_error(error: Exception) -> str:
     """Turn a raw model or download error into a short message that says what to do."""
 
+    if isinstance(error, cancel.Cancelled):
+        return str(error)
     text = str(error)
     lowered = text.lower()
     if "out of memory" in lowered:
@@ -586,7 +592,7 @@ def build_app(
     holder: ModelHolder | None = None,
     transcriber_factory: Callable[..., Transcriber] = FasterWhisperTranscriber,
     workspace: Workspace | None = None,
-    synthesizer_factory: Callable[[], Synthesizer] = make_synthesizer,
+    synthesizer_factory: Callable[..., Synthesizer] = make_synthesizer,
 ) -> Any:
     """Build the Gradio Blocks app. Pass a holder with FakeTranslator for tests."""
 
@@ -612,6 +618,7 @@ def build_app(
     ) -> tuple[Any, ...]:
         if not targets:
             raise gr.Error("Pick at least one language.")
+        cancel.reset()
         progress = progress or gr.Progress()
 
         def report(done: int, total: int, code: str) -> None:
@@ -670,6 +677,7 @@ def build_app(
     ) -> tuple[Any, ...]:
         if not upload:
             raise gr.Error("Add a lecture video, audio file or .srt first.")
+        cancel.reset()
         progress = progress or gr.Progress()
         models.close()  # free the GPU before the speech model loads
         try:
@@ -703,6 +711,7 @@ def build_app(
         keep: str,
         sheet: str | None,
         want: str,
+        voice_quality: str = "natural",
         progress: Any = None,
     ) -> tuple[Any, ...]:
         dub = want in ("voice", "dub")
@@ -710,6 +719,7 @@ def build_app(
             raise gr.Error("Pick at least one language.")
         if not heard or not upload:
             raise gr.Error("Listen to the lecture first.")
+        cancel.reset()
         progress = progress or gr.Progress()
         table = rows.values.tolist() if hasattr(rows, "values") else rows
         try:
@@ -730,7 +740,11 @@ def build_app(
             engine = ""
             if dub:
                 models.close()  # free the GPU before the voice model loads
-                synth = synthesizer_factory()
+                engine_choice = "mms" if voice_quality == "quick" else "auto"
+                try:
+                    synth = synthesizer_factory(engine_choice)
+                except TypeError:  # a stand-in voice that takes no choice
+                    synth = synthesizer_factory()
 
                 def speak_note(message: str) -> None:
                     progress(None, desc=message)
@@ -853,15 +867,24 @@ def build_app(
                 names = " and ".join(SUPPORTED_LANGUAGES[code] for code in voiced)
                 gr.Warning(f"Voice will be made for {names} only. Other languages get subtitles.")
 
-    def voice_note(kind: str, targets: list[str], want: str) -> str:
-        """Say which of the chosen languages will get a voice."""
+    def voice_note(kind: str, targets: list[str], want: str, quality: str) -> str:
+        """Say which languages get a voice, and how long this choice will take."""
 
-        if kind == "text" or want not in ("voice", "dub"):
-            return ""
+        if kind == "text":
+            return "A text lesson takes a few seconds."
+        if want not in ("voice", "dub"):
+            return "**About 20 seconds** for each minute of video."
         voiced = [SUPPORTED_LANGUAGES[code] for code in targets if code in VOICE_LANGUAGES]
-        if voiced:
-            return f"Voice will be made in: **{', '.join(voiced)}**."
-        return "No voice yet. Tick Hindi or Kannada on Languages."
+        if not voiced:
+            return "No voice yet. Tick Hindi or Kannada on Languages."
+        pace = TIME_QUICK if quality == "quick" else TIME_NATURAL
+        return f"Voice will be made in: **{', '.join(voiced)}**. {pace}"
+
+    def on_want(kind: str, want: str) -> Any:
+        return gr.Radio(visible=kind != "text" and want in ("voice", "dub"))
+
+    def on_cancel() -> None:
+        cancel.request()
 
     def page_head(title: str, why: str = "") -> None:
         gr.Markdown(f"## {title}\n{why}" if why else f"## {title}", elem_classes="page-head")
@@ -979,6 +1002,16 @@ def build_app(
                         value="dub",
                         elem_classes="lang-chips",
                     )
+                    voice_quality = gr.Radio(
+                        label="Voice quality",
+                        info="Natural sounds like a person. Quick is robotic but much faster.",
+                        choices=[
+                            ("Natural voice (slower)", "natural"),
+                            ("Quick voice (robotic)", "quick"),
+                        ],
+                        value="natural",
+                        elem_classes="lang-chips",
+                    )
                     want_note = gr.Markdown(elem_classes="hint")
                     with gr.Accordion("Keep words in English", open=False):
                         keep = gr.Textbox(
@@ -1075,8 +1108,10 @@ def build_app(
                     )
 
         top = SCROLL_TOP_JS
-        for trigger in (kind.change, targets.change, want.change):
-            trigger(voice_note, [kind, targets, want], want_note)
+        for trigger in (kind.change, targets.change, want.change, voice_quality.change):
+            trigger(voice_note, [kind, targets, want, voice_quality], want_note)
+        for trigger in (kind.change, want.change):
+            trigger(on_want, [kind, want], voice_quality)
         kind.change(on_kind, kind, [text_col, file_col, v_upload, want, v_listen, go])
         add_next.click(check_add, [kind, text, upload, v_upload], tabs).then(
             None, None, None, js=top
@@ -1087,14 +1122,16 @@ def build_app(
         check_back.click(lambda: go_to("opts"), None, tabs)
         res_back.click(lambda: go_to("opts"), None, tabs)
         checked = [kind, text, upload, v_upload, targets, want]
-        v_listen.click(check_options, checked, None, js=LOADING_LISTEN_JS).success(
+        e_check = v_listen.click(check_options, checked, None, js=LOADING_LISTEN_JS)
+        e_listen = e_check.success(
             on_listen,
             [v_upload, keep, sheet],
             [v_note, v_heard, v_table, tabs, t_check, status],
-        ).then(None, None, None, js=LOADING_DONE_JS)
-        v_go.click(
+        )
+        e_listen.then(None, None, None, js=LOADING_DONE_JS)
+        e_video = v_go.click(
             on_translate_video,
-            [v_upload, v_heard, v_table, targets, mode, keep, sheet, want],
+            [v_upload, v_heard, v_table, targets, mode, keep, sheet, want, voice_quality],
             [
                 v_files,
                 v_state,
@@ -1109,11 +1146,13 @@ def build_app(
                 status,
                 v_final,
             ],
-            js=LOADING_TRANSLATE_JS,
-        ).then(None, [v_lang, v_voice], None, js=AFTER_TRANSLATE_JS)
+            js=LOADING_VIDEO_JS,
+        )
+        e_video.then(None, [v_lang, v_voice], None, js=AFTER_TRANSLATE_JS)
         v_lang.change(None, v_lang, None, js=SWITCH_TRACK_JS)
         v_voice.change(None, v_voice, None, js=VOICE_JS)
-        go.click(check_options, checked, None, js=LOADING_TRANSLATE_JS).success(
+        e_text_check = go.click(check_options, checked, None, js=LOADING_TRANSLATE_JS)
+        e_text = e_text_check.success(
             on_translate,
             [text, upload, targets, mode, keep, sheet],
             [
@@ -1127,7 +1166,15 @@ def build_app(
                 res_text,
                 status,
             ],
-        ).then(None, None, None, js=LOADING_DONE_JS)
+        )
+        e_text.then(None, None, None, js=LOADING_DONE_JS)
+        cancel_button = gr.Button("cancel", elem_id="ll-cancel")
+        cancel_button.click(
+            on_cancel,
+            None,
+            None,
+            cancels=[e_check, e_listen, e_video, e_text_check, e_text, library.translate_event],
+        )
         review_lang.change(on_review_language, [review_state, review_lang], review_table)
         save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
         again.click(

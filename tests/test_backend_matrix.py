@@ -52,6 +52,7 @@ def _run(client, media: Path, want: str):
         "",
         None,
         want,
+        "natural",
         api_name="/on_translate_video",
     )
 

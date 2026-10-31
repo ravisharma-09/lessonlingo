@@ -17,6 +17,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
+from lessonlingo import cancel
 from lessonlingo.languages import validate_targets
 from lessonlingo.subtitles import Cue, load_subtitles, to_srt, to_vtt, with_text
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
@@ -126,8 +127,11 @@ class FasterWhisperTranscriber:
         compute_type = "float16" if device == "cuda" else "int8"
         _log(f"loading the speech model '{self.size}' on {device} ({compute_type})")
         loading = time.monotonic()
+        threads = {"cpu_threads": os.cpu_count() or 4} if device == "cpu" else {}
         try:
-            self._model = WhisperModel(self.size, device=device, compute_type=compute_type)
+            self._model = WhisperModel(
+                self.size, device=device, compute_type=compute_type, **threads
+            )
         except Exception:
             if device == "cpu":
                 raise
@@ -144,6 +148,19 @@ class FasterWhisperTranscriber:
         forced = os.environ.get("LESSONLINGO_WHISPER_DEVICE", "").strip().lower()
         return forced if forced in ("cpu", "cuda") else "cpu"
 
+    @staticmethod
+    def _cue(segment: object) -> Cue:
+        """One recognised segment as a cue; also the place where Cancel is noticed."""
+
+        cancel.check()
+        return Cue(
+            segment.start,
+            segment.end,
+            segment.text.strip(),
+            segment.avg_logprob,
+            weak_words_of([(w.word, w.probability) for w in (segment.words or [])]),
+        )
+
     def transcribe(self, audio_path: Path) -> list[Cue]:
         """Transcribe English audio into timed cues."""
 
@@ -154,18 +171,10 @@ class FasterWhisperTranscriber:
             vad_filter=True,
             hotwords=", ".join(self.hotwords) or None,
             word_timestamps=True,
+            beam_size=1,  # greedy decoding: much faster, and the teacher checks the text anyway
+            condition_on_previous_text=False,
         )
-        return [
-            Cue(
-                s.start,
-                s.end,
-                s.text.strip(),
-                s.avg_logprob,
-                weak_words_of([(w.word, w.probability) for w in (s.words or [])]),
-            )
-            for s in segments
-            if s.text.strip()
-        ]
+        return [self._cue(s) for s in segments if s.text.strip()]
 
     def close(self) -> None:
         """Free the speech model and its GPU memory before translation starts."""
@@ -241,6 +250,7 @@ def translate_cues(
     texts = [cue.text for cue in cues]
     results: dict[str, list[Cue]] = {}
     for target in targets:
+        cancel.check()
         if status:
             status(f"Translating {target}")
         results[target] = with_text(cues, translator.translate(texts, target))

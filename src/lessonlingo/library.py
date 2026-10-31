@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from lessonlingo import cancel
 from lessonlingo.languages import SUPPORTED_LANGUAGES
 from lessonlingo.translator import Mode
 from lessonlingo.video import Transcriber
@@ -105,6 +106,7 @@ def build_library_tab(
             raise gr.Error("Pick languages and press Save settings first.")
         if not workspace.list_items(course):
             raise gr.Error("This course has no files yet. Add some first.")
+        cancel.reset()
         progress = progress or gr.Progress()
         mode: Mode = workspace.settings(course)["mode"]  # type: ignore[assignment]
         models.close()  # free the GPU before the speech model loads
@@ -196,15 +198,23 @@ def build_library_tab(
     create.click(on_create, [new_name], [course, *view])
     course.change(on_pick, [course], view)
     add.click(on_add, [course, upload], [*view, upload])
-    translate_all.click(
+    translate_event = translate_all.click(
         on_translate_all,
         [course],
         view,
         js=(
             "(...args) => { window.llBusy('Translating the whole course', "
-            "'One file after the other.'); return args; }"
+            "'One file after the other. You can cancel any time.'); return args; }"
         ),
-    ).then(None, None, None, js="() => window.llDone()")
+    )
+    translate_event.then(None, None, None, js="() => window.llDone()")
     remove.click(on_remove, [course, item, confirm], [*view, confirm])
     save.click(on_save_settings, [course, targets, mode, sheet], view)
-    return SimpleNamespace(course=course, item=item, send=send, view=view, on_load=on_load)
+    return SimpleNamespace(
+        course=course,
+        item=item,
+        send=send,
+        view=view,
+        on_load=on_load,
+        translate_event=translate_event,
+    )

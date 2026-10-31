@@ -32,10 +32,20 @@ FORCE_LIGHT_JS = """(() => {
       box.id = 'll-busy';
       box.hidden = true;
       box.innerHTML = '<div class="card"><div class="spin"></div><p class="msg"></p>' +
-        '<p class="sub"></p><p class="time"></p></div>';
+        '<p class="sub"></p><p class="time"></p>' +
+        '<button type="button" class="cancel">Cancel</button></div>';
+      box.querySelector('.cancel').addEventListener('click', () => window.llCancel());
       document.body.appendChild(box);
     }
     return box;
+  };
+  window.llCancel = () => {
+    const box = overlay();
+    const real = document.querySelector('#ll-cancel button') || document.querySelector('button#ll-cancel');
+    if (real) real.click();
+    box.querySelector('.msg').textContent = 'Stopping';
+    box.querySelector('.sub').textContent = 'This takes a few seconds.';
+    setTimeout(() => window.llDone(), 1500);
   };
   window.llDone = () => {
     const box = overlay();
@@ -76,11 +86,20 @@ FORCE_LIGHT_JS = """(() => {
 # These run before a step and hand its inputs on unchanged, so they work in any Gradio 6 version.
 LOADING_LISTEN_JS = (
     "(...args) => { window.llBusy('Listening to the lecture', "
-    "'Speech recognition takes about 15 seconds for every minute of audio.'); return args; }"
+    "'Speech recognition takes about 15 seconds for each minute of video. You can cancel any time.'); return args; }"
 )
 LOADING_TRANSLATE_JS = (
     "(...args) => { window.llBusy('Translating and making your files', "
-    "'A dubbed voice takes a few minutes. Please keep this tab open.'); return args; }"
+    "'A lesson takes a few seconds. You can cancel any time.'); return args; }"
+)
+LOADING_VIDEO_JS = (
+    "(...args) => { const want = args[7]; const quality = args[8]; "
+    "let hint = 'Subtitles take about 20 seconds for each minute of video.'; "
+    "if (want === 'dub' || want === 'voice') { hint = quality === 'quick' "
+    "? 'Quick voice takes about 1 minute for each minute of video.' "
+    ": 'Natural voice takes about 8 to 9 minutes for each minute of video.'; } "
+    "window.llBusy('Translating and making your files', hint + ' You can cancel any time.'); "
+    "return args; }"
 )
 LOADING_DONE_JS = "() => { window.llDone(); window.scrollTo({ top: 0, behavior: 'smooth' }); }"
 
@@ -262,6 +281,13 @@ button.ll-pressed::after { content: ""; position: absolute; right: 18px; top: 50
   animation: ll-spin 0.7s linear infinite; }
 #ll-status { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0;
   pointer-events: none; }
+
+/* The real cancel button stays out of sight; the loader's own Cancel presses it. */
+#ll-cancel { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+#ll-busy .cancel { margin-top: 18px; padding: 10px 28px; border-radius: 999px;
+  border: 1px solid var(--ll-border); background: var(--ll-surface); color: var(--ll-text);
+  font-weight: 700; font-size: 1rem; cursor: pointer; }
+#ll-busy .cancel:hover { border-color: var(--ll-accent); color: var(--ll-accent); }
 
 /* Loading overlay */
 #ll-busy { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;

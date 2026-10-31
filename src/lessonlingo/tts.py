@@ -16,6 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
+from lessonlingo import cancel
 from lessonlingo.subtitles import Cue, load_subtitles
 
 # IndicTrans2 language code -> ISO 639-3 suffix of the facebook/mms-tts-<code> repository.
@@ -341,6 +342,7 @@ def render_dub(
     rate = 0
     speakable = [cue for cue in cues if cue.text.strip()]
     for done, cue in enumerate(speakable, start=1):
+        cancel.check()
         samples, rate = synthesizer.synthesize(cue.text, language)
         if samples:
             spoken.append((cue, _trim_silence(_to_pcm(samples), rate)))
@@ -483,6 +485,7 @@ def dub_subtitles(
     written: list[Path] = []
     try:
         for srt in srt_files:
+            cancel.check()
             code = srt.name.split(".")[-2]
             if code not in VOICE_SUFFIX:
                 continue

@@ -51,6 +51,7 @@ def test_whole_lecture_flow_through_the_real_app(tmp_path: Path) -> None:
             "",
             None,
             "subs",
+            "natural",
             api_name="/on_translate_video",
         )
         shown = result[0]["value"] if isinstance(result[0], dict) else result[0]
