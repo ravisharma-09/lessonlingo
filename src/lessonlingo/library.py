@@ -197,14 +197,14 @@ def build_library_tab(
     course.change(on_pick, [course], view)
     add.click(on_add, [course, upload], [*view, upload])
     translate_all.click(
-        None,
-        None,
-        None,
-        js="() => window.llBusy('Translating the whole course', 'One file after the other.')",
-    )
-    translate_all.click(on_translate_all, [course], view).then(
-        None, None, None, js="() => window.llDone()"
-    )
+        on_translate_all,
+        [course],
+        view,
+        js=(
+            "(...args) => { window.llBusy('Translating the whole course', "
+            "'One file after the other.'); return args; }"
+        ),
+    ).then(None, None, None, js="() => window.llDone()")
     remove.click(on_remove, [course, item, confirm], [*view, confirm])
     save.click(on_save_settings, [course, targets, mode, sheet], view)
     return SimpleNamespace(course=course, item=item, send=send, view=view, on_load=on_load)

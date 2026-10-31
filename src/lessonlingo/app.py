@@ -31,7 +31,6 @@ from lessonlingo.subtitles import Cue, format_timestamp
 from lessonlingo.translator import IndicTransTranslator, Mode, Translator
 from lessonlingo.tts import VOICE_LANGUAGES, Synthesizer, dub_subtitles, make_synthesizer
 from lessonlingo.ui_assets import (
-    FORCE_LIGHT_JS,
     HERO_HTML,
     LIGHT_HEAD,
     LOADING_DONE_JS,
@@ -460,6 +459,12 @@ VOICE_JS = """(voice) => {
   };
   run(15);
 }"""
+
+
+AFTER_TRANSLATE_JS = (
+    "(lang, voice) => { (" + SWITCH_TRACK_JS + ")(lang); (" + VOICE_JS + ")(voice); "
+    "window.llDone(); window.scrollTo({ top: 0, behavior: 'smooth' }); }"
+)
 
 
 def player_html(
@@ -1082,14 +1087,12 @@ def build_app(
         check_back.click(lambda: go_to("opts"), None, tabs)
         res_back.click(lambda: go_to("opts"), None, tabs)
         checked = [kind, text, upload, v_upload, targets, want]
-        v_listen.click(None, None, None, js=LOADING_LISTEN_JS).then(
-            check_options, checked, None
-        ).success(
+        v_listen.click(check_options, checked, None, js=LOADING_LISTEN_JS).success(
             on_listen,
             [v_upload, keep, sheet],
             [v_note, v_heard, v_table, tabs, t_check, status],
-        ).then(None, None, None, js=LOADING_DONE_JS).then(None, None, None, js=top)
-        v_go.click(None, None, None, js=LOADING_TRANSLATE_JS).then(
+        ).then(None, None, None, js=LOADING_DONE_JS)
+        v_go.click(
             on_translate_video,
             [v_upload, v_heard, v_table, targets, mode, keep, sheet, want],
             [
@@ -1106,14 +1109,11 @@ def build_app(
                 status,
                 v_final,
             ],
-        ).then(None, v_lang, None, js=SWITCH_TRACK_JS).then(None, v_voice, None, js=VOICE_JS).then(
-            None, None, None, js=LOADING_DONE_JS
-        ).then(None, None, None, js=top)
+            js=LOADING_TRANSLATE_JS,
+        ).then(None, [v_lang, v_voice], None, js=AFTER_TRANSLATE_JS)
         v_lang.change(None, v_lang, None, js=SWITCH_TRACK_JS)
         v_voice.change(None, v_voice, None, js=VOICE_JS)
-        go.click(None, None, None, js=LOADING_TRANSLATE_JS).then(
-            check_options, checked, None
-        ).success(
+        go.click(check_options, checked, None, js=LOADING_TRANSLATE_JS).success(
             on_translate,
             [text, upload, targets, mode, keep, sheet],
             [
@@ -1127,7 +1127,7 @@ def build_app(
                 res_text,
                 status,
             ],
-        ).then(None, None, None, js=LOADING_DONE_JS).then(None, None, None, js=top)
+        ).then(None, None, None, js=LOADING_DONE_JS)
         review_lang.change(on_review_language, [review_state, review_lang], review_table)
         save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
         again.click(
@@ -1194,7 +1194,6 @@ def launch(
         share=share,
         theme=make_theme(),
         css=GREEN_CSS,
-        js=FORCE_LIGHT_JS,
         allowed_paths=[str(courses_home.root), str(APP_TEMP)],
         footer_links=[],
         head=LIGHT_HEAD,

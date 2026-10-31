@@ -15,13 +15,8 @@ HERO_HTML = """
 </div>
 """
 
-LIGHT_HEAD = (
-    '<meta name="color-scheme" content="light">'
-    "<style>html, body { background: #f1f4f3; color-scheme: light; }</style>"
-    "<script>document.documentElement.classList.remove('dark');</script>"
-)
-
-FORCE_LIGHT_JS = """() => {
+FORCE_LIGHT_JS = """(() => {
+  const boot = () => {
   const light = () => document.body.classList.remove('dark');
   light();
   new MutationObserver(light).observe(document.body, {
@@ -73,17 +68,28 @@ FORCE_LIGHT_JS = """() => {
     if (!box || box.hidden) return;
     if (document.querySelector('.toast-body.error, .toast-wrap .error')) window.llDone();
   }).observe(document.body, { childList: true, subtree: true });
-}"""
+  };
+  if (document.body) boot();
+  else document.addEventListener('DOMContentLoaded', boot);
+})();"""
 
+# These run before a step and hand its inputs on unchanged, so they work in any Gradio 6 version.
 LOADING_LISTEN_JS = (
-    "() => { window.llBusy('Listening to the lecture', "
-    "'The first run loads the speech model, so it can take a minute.'); }"
+    "(...args) => { window.llBusy('Listening to the lecture', "
+    "'The first run loads the speech model, so it can take a minute.'); return args; }"
 )
 LOADING_TRANSLATE_JS = (
-    "() => { window.llBusy('Translating and making your files', "
-    "'A dubbed voice takes a few minutes. Please keep this tab open.'); }"
+    "(...args) => { window.llBusy('Translating and making your files', "
+    "'A dubbed voice takes a few minutes. Please keep this tab open.'); return args; }"
 )
-LOADING_DONE_JS = "() => { window.llDone(); }"
+LOADING_DONE_JS = "() => { window.llDone(); window.scrollTo({ top: 0, behavior: 'smooth' }); }"
+
+# Put in the page head, so it runs the same way in every Gradio 6 version (launch(js=) differs).
+LIGHT_HEAD = (
+    '<meta name="color-scheme" content="light">'
+    "<style>html, body { background: #f1f4f3; color-scheme: light; }</style>"
+    "<script>" + FORCE_LIGHT_JS + "</script>"
+)
 
 SCROLL_TOP_JS = "() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }"
 
@@ -110,7 +116,7 @@ footer { display: none !important; }
   gap: 18px !important; }
 span[data-testid="block-info"], .block label > span { color: var(--ll-muted) !important;
   font-weight: 700; }
-.block:has(button.upload-container) { height: auto !important; }
+.block:has(button input[type="file"]) { height: auto !important; }
 fieldset.block { padding: 0 !important; border: 0 !important; background: transparent !important; }
 
 #topbar { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; padding: 18px 4px 6px; }
@@ -174,11 +180,11 @@ fieldset.block { padding: 0 !important; border: 0 !important; background: transp
 .label-wrap + div { padding: 16px 4px 4px; }
 
 /* Drop area */
-button.upload-container { min-height: 160px; padding: 44px 16px 20px !important;
+button.upload-container, button:has(> input[type="file"]) { min-height: 160px; padding: 44px 16px 20px !important;
   border: 2px dashed var(--ll-accent) !important;
   background: var(--ll-soft) !important; border-radius: 16px !important;
   color: var(--ll-soft-text) !important; }
-button.upload-container * { color: var(--ll-soft-text) !important; }
+button:has(> input[type="file"]) * { color: var(--ll-soft-text) !important; }
 
 /* Choice tiles: big, with a visible selected state. */
 [data-testid="checkbox-group"] { display: grid !important;
