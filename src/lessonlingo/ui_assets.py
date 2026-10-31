@@ -27,7 +27,7 @@ FORCE_LIGHT_JS = """() => {
     try { return localStorage.getItem('ll-palette') || 'tide'; } catch (e) { return 'tide'; }
   };
   const paint = (name) => {
-    document.body.dataset.palette = name;
+    document.documentElement.dataset.palette = name;
     document.querySelectorAll('#topbar .sw').forEach((b) => {
       b.classList.toggle('on', b.dataset.palette === name);
     });
@@ -46,22 +46,24 @@ SCROLL_TOP_JS = "() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }"
 STYLE_CSS = """
 @import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&display=swap");
 /* One theme: paper page, dark menu panel, one teal accent. */
-:root, body {
+:root {
   --ll-accent: #0b6e69; --ll-accent-hi: #12a58e; --ll-accent-ink: #ffffff;
   --ll-soft: #e3efed; --ll-soft-text: #08524e; --ll-surface: #ffffff; --ll-page: #f1f4f3;
   --ll-border: #dce3e1; --ll-line: #dce3e1; --ll-text: #121a19; --ll-muted: #4f5957;
   --ll-off: #8a9896; --ll-night: #0e1414; --ll-night-text: #a9aeb8;
   --ll-display: "Bricolage Grotesque", "Avenir Next", Figtree, system-ui, sans-serif;
 }
-body[data-palette="forest"] { --ll-accent: #2f7d3a; --ll-accent-hi: #4fb35e; --ll-soft: #e5f1e6;
+:root[data-palette="forest"] { --ll-accent: #2f7d3a; --ll-accent-hi: #4fb35e; --ll-soft: #e5f1e6;
   --ll-soft-text: #1f5a28; --ll-night: #101810; --ll-page: #f2f5f1; --ll-border: #dae4d9; }
-body[data-palette="ocean"] { --ll-accent: #1d4ed8; --ll-accent-hi: #3b82f6; --ll-soft: #e5ecfb;
+:root[data-palette="ocean"] { --ll-accent: #1d4ed8; --ll-accent-hi: #3b82f6; --ll-soft: #e5ecfb;
   --ll-soft-text: #1e3a8a; --ll-night: #0d1220; --ll-page: #f1f3f8; --ll-border: #dae0ee; }
-body[data-palette="plum"] { --ll-accent: #7c3aed; --ll-accent-hi: #a78bfa; --ll-soft: #eee8fb;
+:root[data-palette="plum"] { --ll-accent: #7c3aed; --ll-accent-hi: #a78bfa; --ll-soft: #eee8fb;
   --ll-soft-text: #4c1d95; --ll-night: #140f1f; --ll-page: #f4f2f8; --ll-border: #e2dcee; }
-body[data-palette="sunset"] { --ll-accent: #c2410c; --ll-accent-hi: #f97316; --ll-soft: #fbebe0;
+:root[data-palette="sunset"] { --ll-accent: #c2410c; --ll-accent-hi: #f97316; --ll-soft: #fbebe0;
   --ll-soft-text: #7c2d12; --ll-night: #1a1210; --ll-page: #f8f4f1; --ll-border: #ecdfd6; }
-body, .gradio-container { background: var(--ll-page) !important; color: var(--ll-text); }
+html, body, gradio-app, main, .app, .wrap, .gradio-container {
+  background: var(--ll-page) !important; }
+body, .gradio-container { color: var(--ll-text); }
 
 /* Page shell: full width, teal band on top, menu on the left, page on the right. */
 .gradio-container { max-width: 1760px !important; margin: 0 auto !important;
