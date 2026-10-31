@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import os
 import socket
+import subprocess
 import tempfile
 import threading
 from collections.abc import Callable
@@ -336,6 +337,32 @@ def _subtitle_data_url(path: str) -> str:
     return f"data:text/vtt;charset=utf-8;base64,{encoded}"
 
 
+def _voice_data_url(path: str) -> str:
+    """The voice as a small embedded audio file, so playing it needs no file route.
+
+    The WAV is squeezed to AAC (about 0.5 MB a minute) by ffmpeg. If ffmpeg cannot, the WAV
+    itself is embedded.
+    """
+
+    wav = Path(path)
+    packed = wav.with_suffix(".m4a")
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-i", str(wav), "-c:a", "aac", "-b:a", "64k", str(packed)],
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode == 0 and packed.exists() and packed.stat().st_size > 0:
+        kind, source = "audio/mp4", packed
+    else:
+        kind, source = "audio/wav", wav
+    return f"data:{kind};base64,{base64.b64encode(source.read_bytes()).decode('ascii')}"
+
+
+VOICE_WARNING = (
+    "The voice could not play in this browser. Download the dubbed video from the files below, "
+    "or press play again."
+)
+
 VOICE_JS = """(voice) => {
   const root = document.querySelector('#lecture-player');
   const video = root && root.querySelector('video');
@@ -346,9 +373,13 @@ VOICE_JS = """(voice) => {
     const a = current();
     if (a && Math.abs(a.currentTime - video.currentTime) > 0.3) a.currentTime = video.currentTime;
   };
+  const warn = () => {
+    const el = root.querySelector('.ll-warn');
+    if (el) el.hidden = false;
+  };
   const start = () => {
     const a = current();
-    if (a) { align(); a.play().catch(() => {}); }
+    if (a) { align(); a.play().catch(warn); }
   };
   if (!video.__voiceBound) {
     video.__voiceBound = true;
@@ -370,7 +401,8 @@ VOICE_JS = """(voice) => {
   if (a) {
     a.currentTime = video.currentTime;
     a.playbackRate = video.playbackRate;
-    if (!video.paused) a.play().catch(() => {});
+    if (a.error) warn();
+    if (!video.paused) a.play().catch(warn);
   }
 }"""
 
@@ -395,7 +427,8 @@ def player_html(
         for code, path in subtitles.items()
     )
     voice_tags = "".join(
-        f'<audio preload="auto" data-code="{code}" src="{_file_url(path)}"></audio>'
+        f'<audio preload="auto" data-code="{code}" src="{_voice_data_url(path)}"'
+        " onerror=\"this.parentElement.querySelector('.ll-warn').hidden=false\"></audio>"
         for code, path in (voices or {}).items()
     )
     sub_items = [("off", "Off")] + [(code, SUPPORTED_LANGUAGES[code]) for code in subtitles]
@@ -409,7 +442,8 @@ def player_html(
         '<div class="ll-player">'
         f'<video controls preload="metadata" src="{_file_url(video)}" '
         f'style="width:100%;border-radius:14px;background:#000;display:block">{tracks}</video>'
-        f'<div class="ll-menus">{menus}</div></div>{voice_tags}'
+        f'<div class="ll-menus">{menus}</div>{voice_tags}'
+        f'<p class="ll-warn" hidden>{VOICE_WARNING}</p></div>'
     )
 
 

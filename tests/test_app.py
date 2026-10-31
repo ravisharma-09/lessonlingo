@@ -237,3 +237,24 @@ def test_player_urls_handle_windows_paths(tmp_path: Path) -> None:
 
     assert "file=C:/Users/Teacher/AppData/Local/Temp/a%20b/talk.mp4" in html
     assert "\\" not in html
+
+
+def test_voices_are_embedded_in_the_page_not_served_from_a_file_route(tmp_path: Path) -> None:
+    import wave
+
+    from lessonlingo.app import player_html
+
+    vtt = tmp_path / "a.hin_Deva.vtt"
+    vtt.write_text("WEBVTT\n", encoding="utf-8")
+    wav = tmp_path / "a.hin_Deva.wav"
+    with wave.open(str(wav), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(16000)
+        handle.writeframes(b"\x10\x00" * 16000)
+
+    html = player_html("/tmp/a.mp4", {"hin_Deva": str(vtt)}, "hin_Deva", {"hin_Deva": str(wav)})
+
+    assert '<audio preload="auto" data-code="hin_Deva" src="data:audio/' in html
+    assert "/gradio_api/file=" + str(wav) not in html
+    assert 'class="ll-warn" hidden' in html and "Audio" in html

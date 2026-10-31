@@ -174,6 +174,9 @@ button.secondary { min-height: 56px; font-size: 1.05rem !important; font-weight:
 .ll-pop button { text-align: left; padding: 10px 12px; border: 0; border-radius: 8px;
   background: transparent; color: #fff; font-size: 1rem; cursor: pointer; }
 .ll-pop button:hover { background: rgba(255, 255, 255, 0.16); }
+.ll-warn { margin: 8px 0 0; padding: 10px 14px; border-radius: 10px; background: #fff3cd;
+  color: #5c4400; }
+.ll-warn[hidden] { display: none; }
 .ll-pop button.on { background: #16803c; font-weight: 800; }
 video::cue { font-size: 1.3em; background: rgba(0, 0, 0, 0.78); color: #ffffff; }
 
