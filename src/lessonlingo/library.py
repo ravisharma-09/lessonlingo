@@ -159,7 +159,6 @@ def build_library_tab(
             upload = gr.File(
                 label="Add files (video, audio, .srt, lessons)",
                 file_count="multiple",
-                height=140,
             )
             add = gr.Button("Add to course", variant="secondary")
         with gr.Column(scale=3, min_width=320, elem_classes="side-card"):
@@ -174,7 +173,6 @@ def build_library_tab(
                 label="Glossary file (.csv, optional)",
                 file_types=[".csv"],
                 type="filepath",
-                height=140,
             )
             save = gr.Button("Save settings", variant="secondary")
     table = gr.Dataframe(

@@ -6,7 +6,8 @@ import pytest
 def test_header_is_plain_with_one_theme() -> None:
     from lessonlingo.ui_assets import HERO_HTML, STYLE_CSS
 
-    assert "<svg" not in HERO_HTML and "pumpkin" not in HERO_HTML.lower()
+    assert "pumpkin" not in HERO_HTML.lower() and "ghost" not in HERO_HTML.lower()
+    assert HERO_HTML.count("<svg") == 1 and "LessonLingo logo" in HERO_HTML
     assert "data-accent" not in STYLE_CSS and "body.dark" not in STYLE_CSS
 
 

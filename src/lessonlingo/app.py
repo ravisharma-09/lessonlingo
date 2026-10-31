@@ -842,14 +842,12 @@ def build_app(
                         )
                         upload = gr.File(
                             label="or a file (.md, .txt)",
-                            height=110,
                             file_types=[".md", ".markdown", ".txt"],
                             type="filepath",
                         )
                     with gr.Column() as file_col:
                         v_upload = gr.File(
                             label="Video file",
-                            height=200,
                             file_types=[
                                 ".mp4",
                                 ".mkv",
@@ -912,7 +910,6 @@ def build_app(
                             label="Glossary file (.csv)",
                             file_types=[".csv"],
                             type="filepath",
-                            height=100,
                         )
                     with gr.Row(elem_classes="nav-bar"):
                         opts_back = gr.Button("Back", variant="secondary", size="lg")

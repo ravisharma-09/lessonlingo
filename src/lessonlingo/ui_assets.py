@@ -4,8 +4,13 @@ from __future__ import annotations
 
 HERO_HTML = """
 <div id="topbar">
-  <span class="mark" aria-hidden="true">L</span>
-  <b>LessonLingo</b>
+  <svg viewBox="0 0 56 48" width="50" height="43" class="logo" role="img" aria-label="LessonLingo logo">
+  <path d="M6 2h28a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H19l-8 7v-7H6a6 6 0 0 1-6-6V8a6 6 0 0 1 6-6z" fill="var(--ll-accent)"/>
+  <text x="20" y="21" text-anchor="middle" font-size="18" font-weight="800" fill="#ffffff" font-family="Figtree, Arial, sans-serif">A</text>
+  <path d="M31 19h19a6 6 0 0 1 6 6v10a6 6 0 0 1-6 6h-1v6l-7-6H31a6 6 0 0 1-6-6V25a6 6 0 0 1 6-6z" fill="var(--ll-surface)" stroke="var(--ll-accent)" stroke-width="2.5"/>
+  <text x="40.5" y="37" text-anchor="middle" font-size="17" font-weight="700" fill="var(--ll-accent)" font-family="Noto Sans Devanagari, Arial, sans-serif">अ</text>
+</svg>
+  <b>Lesson<span>Lingo</span></b>
   <span class="tag">Translate lectures and lessons. Works offline.</span>
 </div>
 """
@@ -22,11 +27,14 @@ FORCE_LIGHT_JS = """() => {
 SCROLL_TOP_JS = "() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }"
 
 STYLE_CSS = """
-/* One theme: white surfaces, one teal accent. */
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&display=swap");
+/* One theme: paper page, dark menu panel, one teal accent. */
 :root, body {
-  --ll-accent: #0f766e; --ll-accent-ink: #ffffff; --ll-soft: #e8f5f3; --ll-soft-text: #0b4b46;
-  --ll-surface: #ffffff; --ll-page: #f6f8f8; --ll-border: #dbe5e3; --ll-line: #dbe5e3;
-  --ll-text: #14201f; --ll-muted: #52615f; --ll-off: #8a9896;
+  --ll-accent: #0b6e69; --ll-accent-hi: #12a58e; --ll-accent-ink: #ffffff;
+  --ll-soft: #e3efed; --ll-soft-text: #08524e; --ll-surface: #ffffff; --ll-page: #f1f4f3;
+  --ll-border: #dce3e1; --ll-line: #dce3e1; --ll-text: #121a19; --ll-muted: #4f5957;
+  --ll-off: #8a9896; --ll-night: #0e1414; --ll-night-text: #a9aeb8;
+  --ll-display: "Bricolage Grotesque", "Avenir Next", Figtree, system-ui, sans-serif;
 }
 body, .gradio-container { background: var(--ll-page) !important; color: var(--ll-text); }
 
@@ -42,18 +50,20 @@ span[data-testid="block-info"], .block label > span { color: var(--ll-muted) !im
 .block:has(button.upload-container) { height: auto !important; }
 fieldset.block { padding: 0 !important; border: 0 !important; background: transparent !important; }
 
-#topbar { display: flex; align-items: center; gap: 12px; background: var(--ll-surface);
-  border-bottom: 1px solid var(--ll-border); margin: 0 -28px 24px; padding: 14px 28px; }
-#topbar .mark { width: 36px; height: 36px; border-radius: 10px; background: var(--ll-accent);
+#topbar { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; padding: 18px 4px 6px; }
+#topbar .logo { flex: none; transition: transform .2s; }
+#topbar:hover .logo { transform: rotate(-4deg) scale(1.05); }
+#topbar b span { color: var(--ll-accent); }
+#topbar .mark-unused { width: 36px; height: 36px; border-radius: 10px; background: var(--ll-accent);
   color: #fff !important; display: grid; place-items: center; font-weight: 900; font-size: 1.2rem; }
-#topbar b { font-size: 1.3rem; color: var(--ll-text) !important; }
-#topbar .tag { color: var(--ll-muted) !important; font-size: .95rem; }
+#topbar b { font-family: var(--ll-display); font-size: 1.5rem; letter-spacing: -.02em; color: var(--ll-text) !important; }
+#topbar .tag { color: var(--ll-muted) !important; font-size: .95rem; margin-left: auto; }
 
 #shell.tabs { display: grid !important; grid-template-columns: 290px minmax(0, 1fr); gap: 32px;
   align-items: start; }
 #shell > .tab-wrapper { grid-column: 1; position: sticky; top: 16px; height: auto !important;
-  background: var(--ll-surface); border: 1px solid var(--ll-border); border-radius: 18px;
-  padding: 12px; }
+  background: var(--ll-night); border: 0; border-radius: 22px;
+  padding: 14px; }
 #shell > .tab-wrapper .tab-container { flex-direction: column !important; height: auto !important;
   gap: 4px; align-items: stretch; }
 #shell > .tab-wrapper .tab-container::after { display: none !important; }
@@ -64,32 +74,44 @@ fieldset.block { padding: 0 !important; border: 0 !important; background: transp
 #shell > .tab-wrapper .overflow-menu { display: none !important; }
 #shell > .tab-wrapper button[role="tab"] { text-align: left; justify-content: flex-start;
   padding: 14px 16px !important; border-radius: 12px !important; border: 0 !important;
-  font-size: 1.02rem; font-weight: 600; color: var(--ll-muted) !important;
-  background: transparent !important; height: auto !important; }
-#shell > .tab-wrapper button[role="tab"]:hover { background: var(--ll-soft) !important; }
+  font-size: 1.02rem; font-weight: 600; color: var(--ll-night-text) !important;
+  background: transparent !important; height: auto !important; border-radius: 999px !important; }
+#shell > .tab-wrapper button[role="tab"]:hover { background: rgba(255, 255, 255, 0.08) !important; }
 #shell > .tab-wrapper button[role="tab"].selected::after { display: none !important; }
-#shell > .tab-wrapper button[role="tab"].selected { background: var(--ll-soft) !important;
-  color: var(--ll-accent) !important; font-weight: 800; }
+#shell > .tab-wrapper button[role="tab"].selected { background: var(--ll-accent) !important;
+  color: #ffffff !important; font-weight: 800; }
 #shell > .tab-wrapper button[role="tab"]:disabled { opacity: .45; cursor: not-allowed; }
 #shell > .tab-wrapper button[role="tab"]:nth-child(6) { margin-top: 14px; position: relative; }
 #shell > .tabitem { grid-column: 2; padding: 0 !important; border: 0 !important; }
 
 .page { gap: 20px !important; padding-bottom: 12px; }
-.page-head h2 { font-size: 2rem; font-weight: 800; margin: 0 0 6px; color: var(--ll-text); }
+.page-head h2 { font-family: var(--ll-display); font-size: 2.8rem; font-weight: 800;
+  letter-spacing: -0.03em; line-height: 1.02; margin: 0 0 8px; color: var(--ll-text); }
 .page-head p { margin: 0; color: var(--ll-muted); font-size: 1rem; }
 .hint, .hint p { color: var(--ll-muted) !important; font-size: 0.98rem; }
 .split { gap: 28px !important; align-items: flex-start !important; }
 .split > * { min-width: 0; }
 .side-card { background: var(--ll-surface); border: 1px solid var(--ll-border);
-  border-radius: 18px; padding: 22px !important; gap: 18px !important; }
+  border-radius: 22px; padding: 22px !important; gap: 18px !important; }
 .side-card h3 { margin-top: 0; }
 .nav-bar { position: sticky; bottom: 0; z-index: 5; background: var(--ll-page);
   border-top: 1px solid var(--ll-border); padding: 14px 0 !important; gap: 12px !important;
   justify-content: flex-end; }
 .nav-bar > * { flex: 0 1 auto !important; min-width: 200px; }
 
+/* Folded sections */
+.label-wrap { width: 100%; display: flex !important; justify-content: space-between;
+  align-items: center; padding: 14px 18px !important; border: 1px solid var(--ll-border) !important;
+  border-radius: 999px !important; background: var(--ll-surface) !important;
+  color: var(--ll-text) !important; font-size: 1.02rem; font-weight: 700; cursor: pointer; }
+.label-wrap:hover { border-color: var(--ll-accent) !important; }
+.label-wrap:focus-visible, button:focus-visible { outline: 2px solid var(--ll-accent);
+  outline-offset: 2px; }
+.label-wrap .icon { color: var(--ll-accent) !important; }
+.label-wrap + div { padding: 16px 4px 4px; }
+
 /* Drop area */
-button.upload-container { min-height: 190px; padding: 44px 16px 20px !important;
+button.upload-container { min-height: 160px; padding: 44px 16px 20px !important;
   border: 2px dashed var(--ll-accent) !important;
   background: var(--ll-soft) !important; border-radius: 16px !important;
   color: var(--ll-soft-text) !important; }
@@ -101,32 +123,33 @@ button.upload-container * { color: var(--ll-soft-text) !important; }
 [data-testid="checkbox-group"] label, label[data-testid$="-radio-label"] {
   display: flex !important; align-items: center; gap: 10px; min-height: 54px;
   padding: 12px 16px !important; font-size: 1.02rem; cursor: pointer;
-  border-radius: 14px !important; border: 2px solid var(--ll-border) !important;
+  border-radius: 16px !important; border: 1.5px solid var(--ll-border) !important;
   background: var(--ll-surface) !important; box-shadow: none !important;
   color: var(--ll-text) !important; }
 [data-testid="checkbox-group"] label:hover, label[data-testid$="-radio-label"]:hover {
   border-color: var(--ll-accent) !important; }
 [data-testid="checkbox-group"] label.selected, label[data-testid$="-radio-label"].selected {
-  border-color: var(--ll-accent) !important; background: var(--ll-soft) !important;
-  color: var(--ll-soft-text) !important; font-weight: 700; }
+  border-color: var(--ll-accent) !important; background: var(--ll-accent) !important;
+  color: #ffffff !important; font-weight: 700; }
 [data-testid="checkbox-group"] label.selected::after,
 label[data-testid$="-radio-label"].selected::after {
-  content: "\\2713"; margin-left: auto; color: var(--ll-accent); font-weight: 800; }
+  content: "\\2713"; margin-left: auto; color: #ffffff; font-weight: 800; }
 [data-testid="checkbox-group"] input, label[data-testid$="-radio-label"] input {
   position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
 [data-testid="checkbox-group"] label span,
-label[data-testid$="-radio-label"] span { margin: 0 !important; }
+label[data-testid$="-radio-label"] span { margin: 0 !important; color: inherit !important;
+  font-weight: inherit !important; }
 div:has(> label[data-testid$="-radio-label"]) { display: grid !important; gap: 10px; }
 .lang-chips div:has(> label[data-testid$="-radio-label"]) {
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 
 /* Buttons */
 button.primary, .primary { min-height: 54px; font-size: 1.08rem !important; font-weight: 800 !important;
-  border-radius: 14px !important; background: var(--ll-accent) !important;
+  border-radius: 999px !important; background: var(--ll-accent) !important;
   color: var(--ll-accent-ink) !important; border: 0 !important; }
 button.secondary { min-height: 54px; font-size: 1.05rem !important; font-weight: 700 !important;
-  border-radius: 14px !important; background: var(--ll-surface) !important;
-  color: var(--ll-accent) !important; border: 2px solid var(--ll-accent) !important; }
+  border-radius: 999px !important; background: var(--ll-surface) !important;
+  color: var(--ll-text) !important; border: 1px solid var(--ll-border) !important; }
 .link-button, .link-button button, button.link-button { min-height: 0 !important;
   background: transparent !important; border: 0 !important; color: var(--ll-accent) !important;
   text-decoration: underline; font-weight: 600 !important; box-shadow: none !important;
