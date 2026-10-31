@@ -134,6 +134,7 @@
   /* Proof */
   .proof { margin-top: 2rem; background: var(--night); border-radius: 26px; padding: 14px; }
   .proof video { width: 100%; border-radius: 16px; display: block; background: #000; }
+  .proof iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 16px; display: block; background: #000; }
   .slot { display: grid; place-items: center; text-align: center; min-height: 340px; color: var(--night-text); padding: 2rem; }
   .slot b { display: block; font-family: var(--display); color: #fff; font-size: 1.7rem; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
   .slot svg { width: 64px; height: 64px; margin: 0 auto 1rem; display: block; }
@@ -358,17 +359,12 @@ lessonlingo course translate "Science 8" --offline</div>
 <!-- Proof -->
 <section id="proof" class="wrap">
   <p class="eyebrow">Proof</p>
-  <h2>See it work, with the Wi-Fi off.</h2>
+  <h2>See it work.</h2>
   <p class="lead" style="margin-top:1rem">A real run on a real laptop: an English lecture in, subtitles and a dubbed voice out.</p>
   <div class="proof" id="proof-box">
-    <div class="slot" id="proof-slot">
-      <div>
-        <svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><circle cx="32" cy="32" r="30" stroke="#c2410c" stroke-width="3"/><path d="M26 20l20 12-20 12z" fill="#c2410c"/></svg>
-        <b>The demo video goes here</b>
-        <span>Recorded on our laptop with the Wi-Fi off. Coming soon.</span>
-      </div>
-    </div>
+    <iframe src="https://drive.google.com/file/d/14o1EKPjDEL0C3nrbI1I34OKNNmJVfFfg/preview" title="LessonLingo demo video" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe>
   </div>
+  <p class="lead" style="margin-top:1rem;font-size:1rem"><a class="link" href="https://drive.google.com/file/d/14o1EKPjDEL0C3nrbI1I34OKNNmJVfFfg/view" target="_blank" rel="noopener">Open the demo video in Google Drive</a> if it does not play here.</p>
 </section>
 
 <!-- Limits and open source -->
