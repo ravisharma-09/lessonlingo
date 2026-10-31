@@ -12,6 +12,7 @@ HERO_HTML = """
 </svg>
   <b>Lesson<span>Lingo</span></b>
   <span class="tag">Translate lectures and lessons. Works offline.</span>
+  <div class="palette" role="group" aria-label="Colour palette"><button type="button" class="sw" data-palette="tide" title="Tide" aria-label="Tide palette" style="background:#0b6e69" onclick="llPalette('tide')"></button><button type="button" class="sw" data-palette="forest" title="Forest" aria-label="Forest palette" style="background:#2f7d3a" onclick="llPalette('forest')"></button><button type="button" class="sw" data-palette="ocean" title="Ocean" aria-label="Ocean palette" style="background:#1d4ed8" onclick="llPalette('ocean')"></button><button type="button" class="sw" data-palette="plum" title="Plum" aria-label="Plum palette" style="background:#7c3aed" onclick="llPalette('plum')"></button><button type="button" class="sw" data-palette="sunset" title="Sunset" aria-label="Sunset palette" style="background:#c2410c" onclick="llPalette('sunset')"></button></div>
 </div>
 """
 
@@ -22,6 +23,22 @@ FORCE_LIGHT_JS = """() => {
     attributes: true,
     attributeFilter: ['class'],
   });
+  const read = () => {
+    try { return localStorage.getItem('ll-palette') || 'tide'; } catch (e) { return 'tide'; }
+  };
+  const paint = (name) => {
+    document.body.dataset.palette = name;
+    document.querySelectorAll('#topbar .sw').forEach((b) => {
+      b.classList.toggle('on', b.dataset.palette === name);
+    });
+  };
+  window.llPalette = (name) => {
+    try { localStorage.setItem('ll-palette', name); } catch (e) { /* private window */ }
+    paint(name);
+  };
+  paint(read());
+  setTimeout(() => paint(read()), 600);
+  setTimeout(() => paint(read()), 1800);
 }"""
 
 SCROLL_TOP_JS = "() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }"
@@ -36,6 +53,14 @@ STYLE_CSS = """
   --ll-off: #8a9896; --ll-night: #0e1414; --ll-night-text: #a9aeb8;
   --ll-display: "Bricolage Grotesque", "Avenir Next", Figtree, system-ui, sans-serif;
 }
+body[data-palette="forest"] { --ll-accent: #2f7d3a; --ll-accent-hi: #4fb35e; --ll-soft: #e5f1e6;
+  --ll-soft-text: #1f5a28; --ll-night: #101810; --ll-page: #f2f5f1; --ll-border: #dae4d9; }
+body[data-palette="ocean"] { --ll-accent: #1d4ed8; --ll-accent-hi: #3b82f6; --ll-soft: #e5ecfb;
+  --ll-soft-text: #1e3a8a; --ll-night: #0d1220; --ll-page: #f1f3f8; --ll-border: #dae0ee; }
+body[data-palette="plum"] { --ll-accent: #7c3aed; --ll-accent-hi: #a78bfa; --ll-soft: #eee8fb;
+  --ll-soft-text: #4c1d95; --ll-night: #140f1f; --ll-page: #f4f2f8; --ll-border: #e2dcee; }
+body[data-palette="sunset"] { --ll-accent: #c2410c; --ll-accent-hi: #f97316; --ll-soft: #fbebe0;
+  --ll-soft-text: #7c2d12; --ll-night: #1a1210; --ll-page: #f8f4f1; --ll-border: #ecdfd6; }
 body, .gradio-container { background: var(--ll-page) !important; color: var(--ll-text); }
 
 /* Page shell: full width, teal band on top, menu on the left, page on the right. */
@@ -57,7 +82,11 @@ fieldset.block { padding: 0 !important; border: 0 !important; background: transp
 #topbar .mark-unused { width: 36px; height: 36px; border-radius: 10px; background: var(--ll-accent);
   color: #fff !important; display: grid; place-items: center; font-weight: 900; font-size: 1.2rem; }
 #topbar b { font-family: var(--ll-display); font-size: 1.5rem; letter-spacing: -.02em; color: var(--ll-text) !important; }
-#topbar .tag { color: var(--ll-muted) !important; font-size: .95rem; margin-left: auto; }
+#topbar .palette { display: flex; gap: 8px; align-items: center; }
+#topbar .sw { width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--ll-surface);
+  box-shadow: 0 0 0 1.5px var(--ll-border); cursor: pointer; padding: 0; }
+#topbar .sw.on { box-shadow: 0 0 0 2px var(--ll-text); }
+#topbar .tag { color: var(--ll-muted) !important; font-size: .95rem; margin-left: auto; margin-right: 8px; }
 
 #shell.tabs { display: grid !important; grid-template-columns: 290px minmax(0, 1fr); gap: 32px;
   align-items: start; }
