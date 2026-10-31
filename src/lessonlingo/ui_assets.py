@@ -87,7 +87,7 @@ LOADING_DONE_JS = "() => { window.llDone(); window.scrollTo({ top: 0, behavior: 
 # Put in the page head, so it runs the same way in every Gradio 6 version (launch(js=) differs).
 LIGHT_HEAD = (
     '<meta name="color-scheme" content="light">'
-    "<style>html, body { background: #f1f4f3; color-scheme: light; }</style>"
+    "<style>html, body { background: #f8f4f1; color-scheme: light; }</style>"
     "<script>" + FORCE_LIGHT_JS + "</script>"
 )
 
@@ -95,12 +95,12 @@ SCROLL_TOP_JS = "() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }"
 
 STYLE_CSS = """
 @import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&display=swap");
-/* One theme: paper page, dark menu panel, one teal accent. */
+/* One theme: warm paper page, dark menu panel, one orange accent. */
 :root {
-  --ll-accent: #0b6e69; --ll-accent-hi: #12a58e; --ll-accent-ink: #ffffff;
-  --ll-soft: #e3efed; --ll-soft-text: #08524e; --ll-surface: #ffffff; --ll-page: #f1f4f3;
-  --ll-border: #dce3e1; --ll-line: #dce3e1; --ll-text: #121a19; --ll-muted: #4f5957;
-  --ll-off: #8a9896; --ll-night: #0e1414; --ll-night-text: #a9aeb8;
+  --ll-accent: #c2410c; --ll-accent-hi: #f97316; --ll-accent-ink: #ffffff;
+  --ll-soft: #fbebe0; --ll-soft-text: #7c2d12; --ll-surface: #ffffff; --ll-page: #f8f4f1;
+  --ll-border: #ecdfd6; --ll-line: #ecdfd6; --ll-text: #1a1412; --ll-muted: #5c4f49;
+  --ll-off: #9a8a82; --ll-night: #1a1210; --ll-night-text: #b8aca5;
   --ll-display: "Bricolage Grotesque", "Avenir Next", Figtree, system-ui, sans-serif;
 }
 /* Gradio's own accent follows ours, so no stray green is left in any component. */
@@ -265,13 +265,14 @@ button.ll-pressed::after { content: ""; position: absolute; right: 18px; top: 50
 
 /* Loading overlay */
 #ll-busy { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
-  background: rgba(241, 244, 243, 0.86); backdrop-filter: blur(4px); }
+  background: rgba(248, 244, 241, 0.86); backdrop-filter: blur(4px); }
 #ll-busy[hidden] { display: none; }
 #ll-busy .card { background: var(--ll-surface); border: 1px solid var(--ll-border);
   border-radius: 28px; padding: 36px 44px; text-align: center; max-width: 460px;
   box-shadow: 0 20px 60px rgba(14, 20, 20, 0.15); }
-#ll-busy .spin { width: 54px; height: 54px; margin: 0 auto 20px; border-radius: 50%;
-  border: 5px solid var(--ll-soft); border-top-color: var(--ll-accent);
+#ll-busy .spin { box-sizing: border-box; width: 54px; height: 54px; margin: 0 auto 20px;
+  border-radius: 50%; border-style: solid !important; border-width: 5px !important;
+  border-color: var(--ll-soft) !important; border-top-color: var(--ll-accent) !important;
   animation: ll-spin 0.9s linear infinite; }
 #ll-busy .msg { font-family: var(--ll-display); font-size: 1.6rem; font-weight: 800;
   letter-spacing: -0.02em; margin: 0 0 8px; color: var(--ll-text); }

@@ -103,12 +103,12 @@ def new_output_folder(prefix: str) -> Path:
 
 
 def make_theme() -> Any:
-    """Return the Gradio theme: slate and teal, restyled by the page CSS."""
+    """Return the Gradio theme: slate and orange, restyled by the page CSS."""
 
     import gradio as gr
 
     return gr.themes.Soft(
-        primary_hue="teal",
+        primary_hue="orange",
         neutral_hue="slate",
         radius_size="lg",
         font=[gr.themes.GoogleFont("Figtree"), "system-ui", "sans-serif"],
