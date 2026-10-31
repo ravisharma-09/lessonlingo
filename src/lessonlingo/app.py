@@ -7,7 +7,10 @@ Set up once, then no internet needed: the app only uses models that
 from __future__ import annotations
 
 import base64
+import html
+import json
 import os
+import re
 import socket
 import subprocess
 import tempfile
@@ -30,6 +33,7 @@ from lessonlingo.tts import VOICE_LANGUAGES, Synthesizer, dub_subtitles, make_sy
 from lessonlingo.ui_assets import (
     FORCE_LIGHT_JS,
     HERO_HTML,
+    LIGHT_HEAD,
     LOADING_DONE_JS,
     LOADING_LISTEN_JS,
     LOADING_TRANSLATE_JS,
@@ -65,6 +69,7 @@ AUDIO_FILES = {".mp3", ".wav", ".m4a"}
 SUBTITLE_FILES = {".srt", ".vtt"}
 KIND_FILES = {"video": VIDEO_FILES, "audio": AUDIO_FILES, "subs": SUBTITLE_FILES}
 KIND_NAMES = {"video": "a video", "audio": "an audio file", "subs": "a .srt or .vtt file"}
+DUB_PER_LANGUAGE = re.compile(r"^.*\.([a-z]{3}_[A-Za-z]{4})\.dubbed\.mp4$")
 KIND_CHOICES: list[tuple[str, str]] = [
     ("Text", "text"),
     ("Video", "video"),
@@ -396,9 +401,13 @@ VOICE_JS = """(voice) => {
       const el = root.querySelector('.ll-warn');
       if (el) el.hidden = false;
     };
+    // A load that interrupts a play request is not a failure.
+    const fail = (error) => {
+      if (!error || error.name !== 'AbortError') warn();
+    };
     const start = () => {
       const a = current();
-      if (a) { align(); a.play().catch(warn); }
+      if (a) { align(); a.play().catch(fail); }
     };
     if (!video.__voiceBound) {
       video.__voiceBound = true;
@@ -415,13 +424,38 @@ VOICE_JS = """(voice) => {
     }
     window.__voice = voice;
     audios().forEach((a) => a.pause());
+    const dubs = JSON.parse(video.dataset.dubs || '{}');
+    const target = voice === 'original' ? video.dataset.original : dubs[voice];
+    if (target) {
+      // The dubbed video carries its own voice, so it needs no separate audio.
+      video.muted = false;
+      if (video.dataset.current !== target) {
+        const time = video.currentTime;
+        const playing = !video.paused;
+        const rate = video.playbackRate;
+        video.dataset.current = target;
+        video.src = target;
+        video.addEventListener('loadedmetadata', () => {
+          video.currentTime = time;
+          video.playbackRate = rate;
+          if (playing) video.play().catch(fail);
+        }, { once: true });
+        video.addEventListener('error', () => {
+          // Could not load the dubbed video: fall back to the separate voice track.
+          video.dataset.current = video.dataset.original;
+          video.src = video.dataset.original;
+          warn();
+        }, { once: true });
+      }
+      return;
+    }
     video.muted = voice !== 'original';
     const a = current();
     if (a) {
       a.currentTime = video.currentTime;
       a.playbackRate = video.playbackRate;
       if (a.error) warn();
-      if (!video.paused) a.play().catch(warn);
+      if (!video.paused) a.play().catch(fail);
     }
   };
   run(15);
@@ -433,6 +467,7 @@ def player_html(
     subtitles: dict[str, str],
     selected: str,
     voices: dict[str, str] | None = None,
+    dubbed_videos: dict[str, str] | None = None,
 ) -> str:
     """A standard browser video player with every language as a subtitle track.
 
@@ -459,9 +494,11 @@ def player_html(
     menus = _menu("sub", "CC", "Subtitles", sub_items)
     if voices:
         menus += _menu("audio", "Audio", "Audio track", audio_items)
+    dubs = {code: _file_url(path) for code, path in (dubbed_videos or {}).items()}
     return (
         '<div class="ll-player">'
         f'<video controls playsinline preload="auto" src="{_file_url(video)}" '
+        f'data-original="{_file_url(video)}" data-dubs="{html.escape(json.dumps(dubs))}" '
         f'style="width:100%;border-radius:14px;background:#000;display:block">{tracks}</video>'
         f'<div class="ll-menus">{menus}</div>{voice_tags}'
         f'<p class="ll-warn" hidden>{VOICE_WARNING}</p></div>'
@@ -600,6 +637,7 @@ def build_app(
             gr.Tab(interactive=True),
             gr.Column(visible=False),
             gr.Column(visible=True),
+            "",
         )
 
     def on_review_language(review: dict[str, Any], code: str) -> Any:
@@ -648,6 +686,7 @@ def build_app(
             gr.Dataframe(value=transcript_rows(cues)),
             gr.Tabs(selected="check"),
             gr.Tab(interactive=True),
+            "",
         )
 
     def on_translate_video(
@@ -717,10 +756,11 @@ def build_app(
             raise gr.Error(friendly_error(error)) from error
         vtt = {p.name.split(".")[-2]: str(p) for p in written if p.suffix == ".vtt"}
         wavs = {p.name.split(".")[-2]: str(p) for p in spoken if p.suffix == ".wav"}
+        per_language = {m.group(1): str(p) for p in spoken if (m := DUB_PER_LANGUAGE.match(p.name))}
         first = next(iter(vtt))
         has_video = not str(upload).endswith((".srt", ".vtt"))
         player = (
-            player_html(upload, vtt, first, wavs)
+            player_html(upload, vtt, first, wavs, per_language)
             if has_video
             else "<p>Your subtitle files are ready to download below.</p>"
         )
@@ -739,6 +779,12 @@ def build_app(
             help_text += " No voice was made. " + " ".join(voice_notes)
         elif voice_notes:
             help_text += " " + " ".join(voice_notes)
+        final_files = [
+            str(p)
+            for p in spoken
+            if p.name.endswith((".dubbed.mp4", ".subtitled.mp4"))
+            and not DUB_PER_LANGUAGE.match(p.name)
+        ]
         voice_options = [
             ("Original voice", "original"),
             *[(SUPPORTED_LANGUAGES[c], c) for c in wavs],
@@ -756,6 +802,8 @@ def build_app(
             gr.Tab(interactive=True),
             gr.Column(visible=True),
             gr.Column(visible=False),
+            "",
+            gr.File(value=final_files, visible=bool(final_files)),
         )
 
     def check_add(kind: str, text: str, doc: str | None, media: str | None) -> Any:
@@ -827,7 +875,7 @@ def build_app(
             gr.File(label=label),
             gr.Radio(
                 choices=WANT_VIDEO if kind == "video" else WANT_OTHER,
-                value="subs",
+                value="dub" if kind == "video" else "voice",
                 visible=not text_in,
             ),
             gr.Button(visible=not text_in),
@@ -848,6 +896,7 @@ def build_app(
 
     with gr.Blocks(title="LessonLingo") as app:
         gr.HTML(HERO_HTML, padding=False)
+        status = gr.Markdown(elem_id="ll-status")
         with gr.Tabs(elem_id="shell") as tabs:
             with gr.Tab("1 Add", id="add"):
                 with gr.Column(elem_classes="page"):
@@ -922,7 +971,7 @@ def build_app(
                         label="You get",
                         info="Voice is Hindi and Kannada only, and takes a few minutes longer.",
                         choices=[*WANT_VIDEO, WANT_OTHER[1]],
-                        value="subs",
+                        value="dub",
                         elem_classes="lang-chips",
                     )
                     want_note = gr.Markdown(elem_classes="hint")
@@ -982,7 +1031,8 @@ def build_app(
                                     elem_id="lecture-voice",
                                     visible=False,
                                 )
-                        v_files = gr.File(label="Downloads", file_count="multiple")
+                        v_final = gr.File(label="Your video, ready to share", visible=False)
+                        v_files = gr.File(label="All files", file_count="multiple")
                     with gr.Column(visible=False) as res_text:
                         review_lang = gr.Radio(
                             label="Language", choices=[], elem_classes="lang-chips"
@@ -1037,7 +1087,7 @@ def build_app(
         ).success(
             on_listen,
             [v_upload, keep, sheet],
-            [v_note, v_heard, v_table, tabs, t_check],
+            [v_note, v_heard, v_table, tabs, t_check, status],
         ).then(None, None, None, js=LOADING_DONE_JS).then(None, None, None, js=top)
         v_go.click(None, None, None, js=LOADING_TRANSLATE_JS).then(
             on_translate_video,
@@ -1053,6 +1103,8 @@ def build_app(
                 t_result,
                 res_media,
                 res_text,
+                status,
+                v_final,
             ],
         ).then(None, v_lang, None, js=SWITCH_TRACK_JS).then(None, v_voice, None, js=VOICE_JS).then(
             None, None, None, js=LOADING_DONE_JS
@@ -1064,7 +1116,17 @@ def build_app(
         ).success(
             on_translate,
             [text, upload, targets, mode, keep, sheet],
-            [files, review_state, review_lang, review_table, tabs, t_result, res_media, res_text],
+            [
+                files,
+                review_state,
+                review_lang,
+                review_table,
+                tabs,
+                t_result,
+                res_media,
+                res_text,
+                status,
+            ],
         ).then(None, None, None, js=LOADING_DONE_JS).then(None, None, None, js=top)
         review_lang.change(on_review_language, [review_state, review_lang], review_table)
         save_btn.click(on_save_review, [review_state, review_lang, review_table], edited)
@@ -1074,7 +1136,7 @@ def build_app(
             [v_upload, v_heard, v_state, v_player, edited, tabs, t_check, t_result],
         ).then(None, None, None, js=top)
         app.load(library.on_load, None, [library.course, *library.view])
-        app.load(lambda: gr.Radio(choices=WANT_VIDEO, value="subs"), None, want)
+        app.load(lambda: gr.Radio(choices=WANT_VIDEO, value="dub"), None, want)
         library.send.click(
             lambda course, name: (
                 (
@@ -1135,4 +1197,5 @@ def launch(
         js=FORCE_LIGHT_JS,
         allowed_paths=[str(courses_home.root), str(APP_TEMP)],
         footer_links=[],
+        head=LIGHT_HEAD,
     )

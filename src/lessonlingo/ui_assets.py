@@ -15,6 +15,12 @@ HERO_HTML = """
 </div>
 """
 
+LIGHT_HEAD = (
+    '<meta name="color-scheme" content="light">'
+    "<style>html, body { background: #f1f4f3; color-scheme: light; }</style>"
+    "<script>document.documentElement.classList.remove('dark');</script>"
+)
+
 FORCE_LIGHT_JS = """() => {
   const light = () => document.body.classList.remove('dark');
   light();
@@ -52,8 +58,15 @@ FORCE_LIGHT_JS = """() => {
     if (timer) clearInterval(timer);
     timer = setInterval(() => {
       time.textContent = Math.round((Date.now() - started) / 1000) + ' s';
-    }, 1000);
+    }, 500);
   };
+  // Every button shows it was pressed, so a slow step never looks frozen.
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('button.primary, button.secondary');
+    if (!button) return;
+    button.classList.add('ll-pressed');
+    setTimeout(() => button.classList.remove('ll-pressed'), 900);
+  });
   // A failed step shows an error message: never leave the loader on top of it.
   new MutationObserver(() => {
     const box = document.getElementById('ll-busy');
@@ -217,6 +230,20 @@ button.secondary { min-height: 54px; font-size: 1.05rem !important; font-weight:
 .table-wrap td:focus-within, .table-wrap td.focus { outline: 2px solid var(--ll-accent) !important;
   outline-offset: -2px; }
 .table-wrap input, .table-wrap textarea { color: var(--ll-text) !important; }
+
+/* One loader only: ours. Hide Gradio's own orange spinner and progress boxes. */
+[data-testid="status-tracker"], .generating, .progress-bar-wrap { display: none !important; }
+div.wrap.translucent { display: none !important; }
+
+/* Pressed buttons and the hidden status line */
+button.primary:active, button.secondary:active { transform: scale(0.96); }
+button.ll-pressed { opacity: 0.75; pointer-events: none; position: relative; }
+button.ll-pressed::after { content: ""; position: absolute; right: 18px; top: 50%;
+  width: 16px; height: 16px; margin-top: -8px; border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.5); border-top-color: currentColor;
+  animation: ll-spin 0.7s linear infinite; }
+#ll-status { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0;
+  pointer-events: none; }
 
 /* Loading overlay */
 #ll-busy { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
