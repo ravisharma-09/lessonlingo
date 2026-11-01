@@ -43,7 +43,43 @@ internet connection.
 The Windows test laptop uses an RTX 4070-class laptop GPU with 8 GB VRAM and
 16 GB system RAM. Final memory use and performance must be measured there.
 
-## One-time setup
+## 🚀 Quick Start (1-Click Automated Setup)
+
+For the easiest setup on any machine, automated setup scripts and 1-click launchers are provided:
+
+### Windows (Recommended)
+
+1. **Accept model terms**: In your browser, log in to your free Hugging Face account and accept the access agreements (click "Access repository"):
+   - [IndicTrans2 200M (Light Mode)](https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M)
+   - [IndicTrans2 1B (Quality Mode)](https://huggingface.co/ai4bharat/indictrans2-en-indic-1B)
+2. **Run setup**: Double-click **`setup.bat`** (or in PowerShell run `.\setup.ps1`).
+   - Checks/installs Python 3.11.
+   - Creates the `.venv` virtual environment.
+   - Automatically detects if you have an NVIDIA GPU (installs CUDA 12.4 PyTorch) or CPU.
+   - Installs all dependencies.
+   - Checks/installs FFmpeg.
+   - Authenticates with Hugging Face and downloads the models.
+3. **Launch the app**: Double-click **`start.bat`**! It starts the offline server and automatically opens your web browser to `http://127.0.0.1:7860`.
+
+---
+
+### macOS and Linux
+
+1. Accept model agreements on Hugging Face ([200M](https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M) and [1B](https://huggingface.co/ai4bharat/indictrans2-en-indic-1B)).
+2. Run the automated setup script:
+   ```bash
+   ./setup.sh
+   ```
+3. Launch the web app:
+   ```bash
+   ./start.sh
+   ```
+
+---
+
+## Manual setup (for developers and custom setups)
+
+If you prefer to configure your environment manually from the command line:
 
 ### Windows PowerShell with NVIDIA CUDA
 
@@ -58,10 +94,12 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 python -m pip install --upgrade pip
 ```
 
-Open the [official PyTorch selector](https://pytorch.org/get-started/locally/),
-choose Windows, Pip, Python, and the supported CUDA version, then run its exact
-installation command. The project lists plain `torch` without a CUDA index URL
-so it does not replace that choice.
+For NVIDIA GPUs, install PyTorch with CUDA 12.4:
+
+```powershell
+python -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+```
+*(On CPU-only machines, run `python -m pip install torch` instead).*
 
 Install the remaining dependencies:
 
@@ -90,11 +128,11 @@ machine. Mac development and CI use `FakeTranslator` only.
 
 ### Hugging Face login and model download
 
-While the Windows test laptop is online:
+While online:
 
 1. Open both model links in the requirements section and accept their terms.
 2. Sign in with `hf auth login` (`huggingface-cli login` on older clients).
-3. Download both model snapshots with one command.
+3. Download both model snapshots with one command:
 
 ```powershell
 lessonlingo setup
@@ -371,6 +409,36 @@ The full script is in [docs/DEMO.md](docs/DEMO.md). Short version:
 - Speech recognition can mishear technical terms, so review subtitles before publishing.
 - Subtitles are added as selectable tracks (`--embed`), not burned into the picture.
 - Real model loading and generated-language quality are not verified on the Mac.
+
+## Troubleshooting and FAQ
+
+### 1. `GatedRepoError` or HTTP 401 / 403 when running setup
+- **Cause**: IndicTrans2 models are gated on Hugging Face and require acceptance of AI4Bharat's terms before downloading.
+- **Solution**:
+  1. Go to [IndicTrans2 200M](https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M) and [IndicTrans2 1B](https://huggingface.co/ai4bharat/indictrans2-en-indic-1B).
+  2. Log in and click **"Access repository"** / **"Acknowledge"** on both pages.
+  3. Create an Access Token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) (Read permissions).
+  4. Run `hf auth login` (or `huggingface-cli login`) in your terminal and paste your token.
+
+### 2. FFmpeg not found (`FileNotFoundError` during video translation)
+- **Cause**: Video processing and subtitle generation require `ffmpeg` on your system `PATH`.
+- **Solution**:
+  - **Windows**: Run `winget install ffmpeg` in PowerShell, then close and reopen your terminal.
+  - **macOS**: Run `brew install ffmpeg`.
+  - **Linux (Ubuntu/Debian)**: Run `sudo apt update && sudo apt install ffmpeg`.
+
+### 3. Microsoft Visual C++ Build Tools error on Windows
+- **Cause**: Building `indictranstoolkit` from source may require C++ compilers if a pre-compiled wheel is not matched for your environment.
+- **Solution**:
+  - Download [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+  - Run the installer and check **"Desktop development with C++"**.
+  - Re-run `setup.bat` or `python -m pip install -r requirements.txt`.
+
+### 4. Running on CPU vs NVIDIA GPU
+- **Quality Mode (1B model)** requires a CUDA-capable NVIDIA GPU.
+- **Light Mode (200M model)** works smoothly on both CPU and GPU:
+  - If you do not have an NVIDIA GPU, pass `--mode light` (or choose Light mode in the Web UI).
+  - For speech recognition on CPU, add `--whisper-device cpu`.
 
 ## Measured end to end
 

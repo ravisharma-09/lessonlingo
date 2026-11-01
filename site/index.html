@@ -303,7 +303,14 @@
   </div>
 
   <div class="panel setup on" id="win">
-    <div class="step"><div class="n">1</div><div><h3>Install the basics</h3><p>Python 3.11, git and ffmpeg. In PowerShell:</p>
+    <div class="card" style="margin-bottom:1.4rem">
+      <span class="tag">Recommended</span>
+      <h3 style="margin-top:0.6rem">⚡ Quick 1-Click Setup</h3>
+      <p>1. Accept terms for <a href="https://huggingface.co/ai4bharat/indictrans2-en-indic-dist-200M" target="_blank" rel="noopener">200M</a> and <a href="https://huggingface.co/ai4bharat/indictrans2-en-indic-1B" target="_blank" rel="noopener">1B</a> on Hugging Face.<br>
+      2. Double-click <code>setup.bat</code> (or run <code>.\setup.ps1</code> in PowerShell) to auto-configure Python, GPU/CUDA, dependencies and models.<br>
+      3. Double-click <code>start.bat</code> to launch!</p>
+    </div>
+    <div class="step"><div class="n">1</div><div><h3>Or manual: Install the basics</h3><p>Python 3.11, git and ffmpeg. In PowerShell:</p>
       <div class="code" data-copy>winget install Python.Python.3.11
 winget install Git.Git
 winget install ffmpeg</div></div></div>
@@ -329,7 +336,12 @@ lessonlingo setup --voices hin_Deva kan_Knda --voice-engine parler</div>
   </div>
 
   <div class="panel setup" id="mac">
-    <div class="step"><div class="n">1</div><div><h3>Install the basics</h3><p>Python 3.11, git and ffmpeg (macOS with Homebrew).</p>
+    <div class="card" style="margin-bottom:1.4rem">
+      <span class="tag">Automated</span>
+      <h3 style="margin-top:0.6rem">⚡ Quick Setup Script</h3>
+      <p>Accept the model terms on Hugging Face, run <code>./setup.sh</code> in terminal, and launch anytime with <code>./start.sh</code>.</p>
+    </div>
+    <div class="step"><div class="n">1</div><div><h3>Or manual: Install the basics</h3><p>Python 3.11, git and ffmpeg (macOS with Homebrew).</p>
       <div class="code" data-copy>brew install python@3.11 git ffmpeg</div></div></div>
     <div class="step"><div class="n">2</div><div><h3>Get the code and install</h3>
       <div class="code" data-copy>git clone https://github.com/ravisharma-09/lessonlingo.git
